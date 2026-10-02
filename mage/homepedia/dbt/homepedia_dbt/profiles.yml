@@ -1,0 +1,15 @@
+# Connexion de dbt à PostgreSQL.
+# Les identifiants viennent des variables d'environnement (fichier .env chargé par docker-compose) :
+# aucun mot de passe écrit ici.
+homepedia_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: postgres          # nom du service dans docker-compose
+      port: 5432
+      user: "{{ env_var('POSTGRES_USER') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      dbname: "{{ env_var('POSTGRES_DB') }}"
+      schema: staging         # schéma par défaut (écrasé par +schema dans dbt_project.yml)
+      threads: 2              # nb de modèles construits en parallèle

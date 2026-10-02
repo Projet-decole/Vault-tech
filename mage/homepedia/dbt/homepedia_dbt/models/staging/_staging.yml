@@ -1,0 +1,25 @@
+# Documentation et tests des modèles staging
+version: 2
+
+models:
+  - name: stg_parcelles
+    description: Parcelles cadastrales avec géométrie PostGIS en Lambert-93 (EPSG:2154, mètres).
+    columns:
+      - name: id_parcelle
+        tests: [unique, not_null]
+      - name: geom
+        description: Contour de la parcelle (Polygon ou MultiPolygon), EPSG:2154.
+        tests: [not_null]
+
+  - name: stg_cavites
+    description: >
+      Cavités souterraines (BRGM) avec géométrie ponctuelle en Lambert-93.
+      Table (et non vue) pour porter un index spatial GiST.
+    columns:
+      - name: id_cavite
+        tests: [unique, not_null]
+      - name: localisation_fiable
+        description: Vrai si la cavité a des coordonnées précises (ni absentes, ni centroïde de commune).
+        tests: [not_null]
+      - name: geom
+        description: Point de la cavité, EPSG:2154. NULL pour les 5 cavités confidentielles.

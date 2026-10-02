@@ -1,0 +1,23 @@
+# Pipeline de nettoyage : HDFS /bronze -> Spark -> PostgreSQL silver
+# Blocs "custom" : ils ne renvoient pas de données, ils lancent un job Spark (spark-submit).
+# Enchaînés l'un après l'autre (pas en parallèle) pour ménager la RAM de la machine.
+blocks:
+- name: run_clean_cadastre
+  uuid: run_clean_cadastre
+  type: custom
+  upstream_blocks: []
+  downstream_blocks: [run_clean_cavites]
+- name: run_clean_cavites
+  uuid: run_clean_cavites
+  type: custom
+  upstream_blocks: [run_clean_cadastre]
+  downstream_blocks: [run_stats_communes]
+- name: run_stats_communes
+  uuid: run_stats_communes
+  type: custom
+  # a besoin des deux tables silver écrites juste avant
+  upstream_blocks: [run_clean_cavites]
+  downstream_blocks: []
+name: run_spark_clean
+uuid: run_spark_clean
+type: python

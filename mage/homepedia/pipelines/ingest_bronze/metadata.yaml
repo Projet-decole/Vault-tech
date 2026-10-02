@@ -1,0 +1,47 @@
+# Pipeline d'ingestion : sources ouvertes -> HDFS /bronze (brut, en JSON Lines)
+# upstream_blocks = blocs exécutés AVANT, dont le résultat est passé en argument (dans cet ordre)
+blocks:
+- name: load_perimetre
+  uuid: load_perimetre
+  type: data_loader
+  upstream_blocks: []
+  downstream_blocks: [ingest_cadastre, fetch_cavites, write_perimetre_postgres]
+- name: write_perimetre_postgres
+  uuid: write_perimetre_postgres
+  type: data_exporter
+  # la liste des communes (noms compris) part aussi dans Postgres, pour dbt
+  upstream_blocks: [load_perimetre]
+  downstream_blocks: []
+- name: ingest_cadastre
+  uuid: ingest_cadastre
+  type: data_exporter
+  # télécharge + convertit + écrit dans HDFS, commune par commune (flux : une seule en mémoire)
+  upstream_blocks: [load_perimetre]
+  downstream_blocks: [retention_bronze]
+  retry_config:
+    retries: 2
+    delay: 30
+- name: fetch_cavites
+  uuid: fetch_cavites
+  type: data_loader
+  upstream_blocks: [load_perimetre]
+  downstream_blocks: [write_hdfs]
+- name: write_hdfs
+  uuid: write_hdfs
+  type: data_exporter
+  upstream_blocks: [fetch_cavites]
+  downstream_blocks: [retention_bronze]
+  # En cas d'échec passager (HDFS lent, machine en veille...), Mage relance le bloc.
+  # Sans danger car le bloc est idempotent (il vide le dossier du jour avant d'écrire).
+  retry_config:
+    retries: 2       # jusqu'à 2 nouvelles tentatives
+    delay: 30        # 30 s d'attente avant de réessayer
+- name: retention_bronze
+  uuid: retention_bronze
+  type: custom
+  # supprime les ingestions au-delà des N dernières (RETENTION_BRONZE_INGESTIONS), une fois l'ingestion réussie
+  upstream_blocks: [ingest_cadastre, write_hdfs]
+  downstream_blocks: []
+name: ingest_bronze
+uuid: ingest_bronze
+type: python

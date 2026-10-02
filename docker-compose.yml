@@ -1,0 +1,209 @@
+# Stack HOMEPEDIA — ajoutée phase par phase.
+#   phase 0 : postgres (+ PostGIS)
+#   phase 2 : mage (orchestrateur)
+#   phase 3 : namenode + datanode (HDFS, le data lake)
+#   phase 4 : spark-master + spark-worker (calcul distribué)
+#   phase 5 : dbt-docs (site de documentation dbt ; dbt lui-même tourne dans mage)
+#   phase 6 : superset (tableaux de bord)
+#   bonus   : mongo + mongo-express (documents / textes), seaweedfs (fichiers / médias, S3)
+
+services:
+  postgres:
+    # Postgres 17 + extension PostGIS 3.5 (type geometry, fonctions spatiales ST_*)
+    image: postgis/postgis:17-3.5
+    container_name: homepedia-postgres
+    # Lit POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB depuis le fichier .env
+    env_file: .env
+    ports:
+      # hôte:conteneur — permet de se connecter depuis ta machine (DBeaver, psql...)
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Volume nommé : les données survivent à la suppression du conteneur
+      - pg_data:/var/lib/postgresql/data
+      # Scripts exécutés UNE SEULE FOIS, au tout premier démarrage (volume vide)
+      - ./sql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Permet aux futurs services d'attendre que la base soit prête
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mage:
+    # Orchestrateur : exécute les pipelines (suites de blocs Python)
+    # Image construite depuis docker/mage/Dockerfile (Mage officiel + client HDFS + Java/pyspark)
+    build: docker/mage
+    image: homepedia-mage:0.9.79
+    container_name: homepedia-mage
+    # Démarre l'interface web et crée le projet "homepedia" s'il n'existe pas encore
+    command: mage start homepedia
+    env_file: .env
+    environment:
+      # Chemin lu par le bloc load_perimetre (os.environ[...])
+      HOMEPEDIA_CONFIG: /config/perimetre.yml
+      # Adresse WebHDFS du NameNode + utilisateur HDFS sous lequel Mage écrit
+      HDFS_WEB_URL: http://namenode:9870
+      HDFS_USER: hadoop
+      # Rétention du bronze HDFS : nombre d'ingestions gardées par source et département (4 = un mois)
+      RETENTION_BRONZE_INGESTIONS: "4"
+      # Adresse du bucket S3 vue depuis le NAVIGATEUR (pour afficher les images dans Superset)
+      S3_URL_PUBLIQUE: http://localhost:8333
+    ports:
+      - "6789:6789"        # interface web de Mage : http://localhost:6789
+    volumes:
+      - ./mage:/home/src   # code du projet Mage (blocs, pipelines), éditable des deux côtés
+      - ./config:/config:ro  # liste des communes, en lecture seule
+      - ./spark/jobs:/spark/jobs:ro  # scripts Spark lancés par Mage avec spark-submit
+      - ./sql/init:/sql/init:ro      # définitions de tables réutilisées par les blocs (ex. silver.medias)
+    depends_on:
+      postgres:
+        condition: service_healthy   # attend que la base soit prête (utile dès la phase 4)
+      namenode:
+        condition: service_started
+    restart: unless-stopped
+
+  namenode:
+    # Le "sommaire" de HDFS : sait quels fichiers existent et où sont leurs blocs
+    build: docker/hadoop
+    image: homepedia-hadoop:3.4.3   # nom de l'image construite, réutilisée par le datanode
+    container_name: homepedia-namenode
+    hostname: namenode              # nom utilisé dans hdfs://namenode:8020
+    command: ["hdfs", "namenode"]
+    env_file: docker/hadoop/hadoop.env
+    environment:
+      # Si ce dossier n'existe pas encore, l'image "formate" HDFS (1er démarrage uniquement)
+      ENSURE_NAMENODE_DIR: /hadoop/dfs/name
+    ports:
+      - "9870:9870"   # interface web : http://localhost:9870
+    volumes:
+      - hdfs_namenode:/hadoop/dfs
+    restart: unless-stopped
+
+  datanode:
+    # Stocke réellement les blocs de données (un seul ici ; des dizaines sur un vrai cluster)
+    build: docker/hadoop            # même image que le namenode (le 2e build utilise le cache)
+    image: homepedia-hadoop:3.4.3
+    container_name: homepedia-datanode
+    hostname: datanode              # les clients WebHDFS sont redirigés vers ce nom
+    command: ["hdfs", "datanode"]
+    env_file: docker/hadoop/hadoop.env
+    volumes:
+      - hdfs_datanode:/hadoop/dfs
+    depends_on:
+      - namenode
+    restart: unless-stopped
+
+  spark-master:
+    # Le "bureau d'embauche" : connaît les workers disponibles et leur attribue les applications
+    image: apache/spark:4.1.3-scala2.13-java17-python3-ubuntu   # même version que pyspark dans Mage
+    container_name: homepedia-spark-master
+    hostname: spark-master
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    ports:
+      - "8080:8080"   # interface web : http://localhost:8080
+      - "7077:7077"   # port où drivers et workers contactent le master
+    restart: unless-stopped
+
+  spark-worker:
+    # Un "ouvrier" : lance les executors qui font réellement les calculs
+    image: apache/spark:4.1.3-scala2.13-java17-python3-ubuntu
+    container_name: homepedia-spark-worker
+    hostname: spark-worker
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    environment:
+      # Ressources que ce worker met à disposition (Docker a ~7,8 Go ; Rhône entier = ~1,9 M parcelles)
+      SPARK_WORKER_CORES: "4"
+      SPARK_WORKER_MEMORY: 3g
+    depends_on:
+      - spark-master
+    restart: unless-stopped
+
+  dbt-docs:
+    # Sert le site de documentation dbt (généré par "dbt docs generate" dans target/).
+    # Simple serveur web Python : pas besoin de garder dbt allumé pour consulter la doc.
+    image: python:3.12-slim
+    container_name: homepedia-dbt-docs
+    command: ["python", "-m", "http.server", "8081", "--directory", "/docs"]
+    ports:
+      - "8081:8081"   # http://localhost:8081 (lineage : bouton en bas à droite)
+    volumes:
+      - ./mage/homepedia/dbt/homepedia_dbt/target:/docs:ro
+    restart: unless-stopped
+
+  superset:
+    # Outil de tableaux de bord, branché sur les tables gold
+    # Image construite depuis docker/superset/Dockerfile (Superset + pilote Postgres + scripts)
+    build: docker/superset
+    image: homepedia-superset:6.1.0
+    container_name: homepedia-superset
+    # Prépare la base interne, le compte admin, la connexion et les datasets, puis lance le serveur
+    command: ["/app/homepedia/bootstrap.sh"]
+    env_file: .env   # SUPERSET_SECRET_KEY, SUPERSET_ADMIN_PASSWORD, identifiants Postgres
+    environment:
+      SERVER_WORKER_AMOUNT: 2   # 2 processus web (défaut : 1)
+    ports:
+      - "8088:8088"   # interface web : http://localhost:8088
+    volumes:
+      - superset_home:/app/superset_home   # base interne SQLite (graphiques, dashboards, comptes)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mongo:
+    # Base DOCUMENTAIRE : stocke des objets JSON imbriqués, sans colonnes fixes (fiches cavités complètes)
+    image: mongo:8.0.32
+    container_name: homepedia-mongo
+    environment:
+      # Compte administrateur créé au 1er démarrage (volume vide)
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+    ports:
+      - "27017:27017"   # pour un client local (MongoDB Compass, mongosh...)
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  mongo-express:
+    # Interface web pour parcourir les bases, collections et documents MongoDB
+    image: mongo-express:1.0.2-20-alpine3.19
+    container_name: homepedia-mongo-express
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo:27017/
+      # Protection de l'interface par identifiant / mot de passe (valeurs du .env)
+      ME_CONFIG_BASICAUTH: "true"
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USER}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD}
+    ports:
+      - "8082:8081"   # http://localhost:8082 (8081 est déjà pris par dbt-docs)
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  seaweedfs:
+    # Stockage de FICHIERS (images, PDF) compatible Amazon S3 : bucket "medias"
+    # (MinIO, prévu par le plan, n'est plus publié sur Docker Hub)
+    image: chrislusf/seaweedfs:4.47
+    container_name: homepedia-seaweedfs
+    hostname: seaweedfs
+    entrypoint: ["sh", "/homepedia/demarrage.sh"]   # génère les droits S3 puis lance "weed mini"
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      SEAWEEDFS_ADMIN_PASSWORD: ${SEAWEEDFS_ADMIN_PASSWORD}
+    ports:
+      - "8333:8333"     # API S3 : http://localhost:8333/medias/<clé> (lecture libre des images)
+      - "23646:23646"   # interface d'administration : http://localhost:23646 (admin / .env)
+    volumes:
+      - ./docker/seaweedfs:/homepedia:ro
+      - seaweedfs_data:/data
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  hdfs_namenode:
+  hdfs_datanode:
+  superset_home:
+  mongo_data:
+  seaweedfs_data:

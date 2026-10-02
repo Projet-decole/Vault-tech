@@ -1,0 +1,30 @@
+slice_name: "Ce que disent les descriptions de cavit\xE9s (MongoDB)"
+description: null
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  datasource: 5__table
+  viz_type: echarts_timeseries_bar
+  x_axis: mot_cle
+  metrics:
+  - expressionType: SIMPLE
+    column:
+      column_name: nb_fiches
+    aggregate: SUM
+    label: "Fiches cavit\xE9s"
+  groupby:
+  - departement
+  x_axis_sort: "Fiches cavit\xE9s"
+  x_axis_sort_asc: false
+  orientation: horizontal
+  show_legend: true
+  legendOrientation: top
+  row_limit: 1000
+  adhoc_filters: []
+  color_scheme: supersetColors
+query_context: null
+cache_timeout: null
+uuid: adb8d32c-0cb8-4b33-8a30-dbc9714503a1
+version: 1.0.0
+dataset_uuid: 481fb051-597f-4225-8936-a187e2a96e73

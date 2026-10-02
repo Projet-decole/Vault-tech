@@ -1,0 +1,40 @@
+# Périmètre géographique du pipeline HOMEPEDIA.
+# Ajouter une commune = ajouter une entrée ici, rien d'autre à modifier.
+#
+# Codes INSEE résolus le 2026-09-25 via :
+#   https://geo.api.gouv.fr/communes?nom=<nom>&codeDepartement=57&fields=code,nom,centre
+# ⚠ Toujours entre guillemets : ce sont des chaînes (ex. "57012" perdrait son 0 en entier,
+#   et en Corse les codes contiennent des lettres : 2A004).
+# ⚠ Code INSEE ≠ code postal (Thionville : INSEE 57672, postal 57100).
+# ⚠ Paris, Lyon, Marseille : le cadastre est découpé par ARRONDISSEMENT
+#   (Lyon 1er = 69381 ... Lyon 9e = 69389) ; le code de la ville entière (69123) ne marche pas.
+#
+# Le département est déduit du code INSEE (2 premiers caractères, 3 pour l'outre-mer : 971...) :
+# on peut mélanger des communes de plusieurs départements.
+
+# Départements ENTIERS : toutes leurs communes sont ajoutées automatiquement.
+# Liste lue sur geo.api.gouv.fr à chaque exécution (villes à arrondissements : les arrondissements).
+# Une commune listée aussi dans "communes" n'est comptée qu'une fois.
+departements:
+    - "69"   # Rhône + Métropole de Lyon : 274 communes et arrondissements, ~1,9 million de parcelles
+
+# Communes ajoutées une par une
+communes:
+    - insee: "57672"
+      nom: Thionville
+    - insee: "57306"
+      nom: Hayange
+    - insee: "57704"
+      nom: Veckring # ouvrage du Hackenberg (ligne Maginot)
+    - insee: "57323"
+      nom: Hettange-Grande
+    - insee: "57012"
+      nom: Algrange
+    - insee: "57463"
+      nom: Metz # attention : la recherche "Metz" renvoie Metzing en premier
+    - insee: "69233"
+      nom: Saint-Romain-au-Mont-d'Or
+    - insee: "69153"
+      nom: Poleymieux-au-Mont-d'Or
+    - insee: "69087"
+      nom: Fontaines-Saint-Martin

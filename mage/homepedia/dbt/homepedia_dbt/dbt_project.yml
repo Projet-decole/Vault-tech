@@ -1,0 +1,21 @@
+# Carte d'identité du projet dbt HOMEPEDIA
+name: homepedia_dbt
+version: '0.1.0'
+config-version: 2
+profile: homepedia_dbt   # nom du profil de connexion, défini dans profiles.yml
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"     # SQL compilé + site de documentation générés ici
+clean-targets: ["target", "dbt_packages"]
+
+# Réglages appliqués par dossier (tous les modèles d'un dossier héritent de ces options)
+models:
+  homepedia_dbt:
+    staging:
+      +materialized: view    # vue = requête enregistrée, recalculée à chaque lecture (rien de stocké)
+      +schema: staging
+    gold:
+      +materialized: table   # table = résultat calculé et stocké (lecture rapide pour Superset)
+      +schema: gold

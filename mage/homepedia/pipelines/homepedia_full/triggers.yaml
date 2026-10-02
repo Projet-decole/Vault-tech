@@ -1,0 +1,15 @@
+triggers:
+- description: "Mise \xE0 jour compl\xE8te chaque lundi \xE0 5 h (heure de Paris),\
+    \ quand personne n'utilise la machine."
+  envs: []
+  last_enabled_at: 2026-09-26 15:02:10.249096+00:00
+  name: hebdomadaire
+  pipeline_uuid: homepedia_full
+  schedule_interval: 0 3 * * 1
+  schedule_type: time
+  settings: {}
+  sla: null
+  start_time: 2026-09-28 00:00:00
+  status: active
+  token: null
+  variables: {}

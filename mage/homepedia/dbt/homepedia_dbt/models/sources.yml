@@ -1,0 +1,60 @@
+# Sources = tables que dbt LIT mais ne construit pas (ici : écrites par Spark en phase 4).
+# Dans le SQL, on y fait référence avec {{ source('silver', 'parcelles') }}.
+version: 2
+
+sources:
+  - name: silver
+    schema: silver
+    description: Données nettoyées et typées par Spark (bronze HDFS → silver).
+    tables:
+      - name: parcelles
+        description: Parcelles cadastrales (Etalab), une ligne par parcelle.
+        columns:
+          - name: id_parcelle
+            description: Identifiant cadastral sur 14 caractères (INSEE + préfixe + section + numéro).
+            tests: [unique, not_null]
+          - name: geometrie_geojson
+            description: Contour de la parcelle, en texte GeoJSON, coordonnées GPS (EPSG:4326).
+            tests: [not_null]
+
+      - name: perimetre_communes
+        description: >
+          Communes étudiées (code INSEE + nom), recopiées depuis config/perimetre.yml
+          par le bloc Mage write_perimetre_postgres.
+        columns:
+          - name: code_insee
+            tests: [unique, not_null]
+          - name: nom
+            tests: [not_null]
+
+      - name: medias
+        description: >
+          Fiches des fichiers médias rangés dans le bucket S3 "medias" (SeaweedFS) : la base garde
+          le chemin (clé) et l'URL, pas le fichier. Écrite par le bloc Mage fetch_orthophotos.
+        columns:
+          - name: cle
+            tests: [unique, not_null]
+
+      - name: cavites_mots_cles
+        description: >
+          Nombre de fiches cavités (MongoDB, recherche plein texte en français sur le nom et les
+          commentaires) mentionnant chaque mot-clé, par département. Écrite par le bloc Mage
+          mongo_index_et_mots_cles (Superset ne sait pas lire MongoDB directement).
+        columns:
+          - name: mot_cle
+            tests: [not_null]
+          - name: nb_fiches
+            tests: [not_null]
+
+      - name: cavites
+        description: Inventaire BRGM des cavités souterraines (BD Cavités), département entier.
+        columns:
+          - name: id_cavite
+            description: Identifiant BRGM (numCavite).
+            tests: [unique, not_null]
+          - name: srid
+            description: Système de coordonnées de x/y (27572 = Lambert II étendu, 4326 = GPS, NULL = inconnu).
+            tests:
+              - accepted_values:
+                  values: [27572, 4326]
+                  quote: false

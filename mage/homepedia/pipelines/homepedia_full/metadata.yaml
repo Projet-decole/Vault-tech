@@ -1,0 +1,91 @@
+# Pipeline COMPLET : sources ouvertes -> HDFS (bronze) -> Spark (silver) -> dbt (gold) -> Superset.
+# Il réutilise les blocs des 3 pipelines d'étape (mêmes fichiers Python, rien n'est recopié) :
+#   ingest_bronze   : load_perimetre ... write_hdfs, write_perimetre_postgres
+#   run_spark_clean : run_clean_cadastre, run_clean_cavites, run_stats_communes
+#   build_gold      : run_dbt_build
+# Si un bloc échoue (ex. un test dbt), les blocs suivants ne sont pas exécutés.
+blocks:
+# --- 1. Ingestion (bronze) ---
+- name: load_perimetre
+  uuid: load_perimetre
+  type: data_loader
+  upstream_blocks: []
+  downstream_blocks: [ingest_cadastre, fetch_cavites, write_perimetre_postgres]
+- name: ingest_cadastre
+  uuid: ingest_cadastre
+  type: data_exporter
+  # télécharge + convertit + écrit dans HDFS, commune par commune (flux : une seule en mémoire)
+  upstream_blocks: [load_perimetre]
+  downstream_blocks: [run_clean_cadastre, retention_bronze]
+  retry_config:
+    retries: 2
+    delay: 30
+- name: fetch_cavites
+  uuid: fetch_cavites
+  type: data_loader
+  upstream_blocks: [load_perimetre]
+  downstream_blocks: [write_hdfs]
+- name: write_hdfs
+  uuid: write_hdfs
+  type: data_exporter
+  upstream_blocks: [fetch_cavites]
+  downstream_blocks: [run_clean_cadastre, retention_bronze]
+  retry_config:
+    retries: 2
+    delay: 30
+- name: write_perimetre_postgres
+  uuid: write_perimetre_postgres
+  type: data_exporter
+  upstream_blocks: [load_perimetre]
+  downstream_blocks: [run_dbt_build]
+# --- 2. Nettoyage Spark (silver) : un job après l'autre pour ménager la RAM ---
+- name: run_clean_cadastre
+  uuid: run_clean_cadastre
+  type: custom
+  upstream_blocks: [ingest_cadastre, write_hdfs]
+  downstream_blocks: [run_clean_cavites]
+- name: run_clean_cavites
+  uuid: run_clean_cavites
+  type: custom
+  upstream_blocks: [run_clean_cadastre]
+  downstream_blocks: [run_stats_communes]
+- name: run_stats_communes
+  uuid: run_stats_communes
+  type: custom
+  upstream_blocks: [run_clean_cavites]
+  downstream_blocks: [run_cavites_mongo]
+# --- 3. Textes (bonus) : fiches complètes dans MongoDB, recherche plein texte → Postgres ---
+- name: run_cavites_mongo
+  uuid: run_cavites_mongo
+  type: custom
+  upstream_blocks: [run_stats_communes]
+  downstream_blocks: [mongo_index_et_mots_cles]
+- name: mongo_index_et_mots_cles
+  uuid: mongo_index_et_mots_cles
+  type: custom
+  upstream_blocks: [run_cavites_mongo]
+  downstream_blocks: [run_dbt_build]
+# --- 4. Modélisation dbt (gold) + tests + documentation ---
+- name: run_dbt_build
+  uuid: run_dbt_build
+  type: custom
+  # attend le silver (Spark + mots-clés MongoDB) ET la liste des communes (noms pour le gold)
+  upstream_blocks: [mongo_index_et_mots_cles, write_perimetre_postgres]
+  downstream_blocks: [fetch_orthophotos]
+# --- 5. Médias (bonus) : photo aérienne des cavités de la carte → bucket S3 "medias" ---
+- name: fetch_orthophotos
+  uuid: fetch_orthophotos
+  type: custom
+  # a besoin du gold (liste des cavités de la carte) ; gold.galerie_cavites est une vue,
+  # donc les nouvelles photos y apparaissent sans relancer dbt
+  upstream_blocks: [run_dbt_build]
+  downstream_blocks: []
+- name: retention_bronze
+  uuid: retention_bronze
+  type: custom
+  # supprime les ingestions au-delà des N dernières (RETENTION_BRONZE_INGESTIONS), une fois l'ingestion réussie
+  upstream_blocks: [ingest_cadastre, write_hdfs]
+  downstream_blocks: []
+name: homepedia_full
+uuid: homepedia_full
+type: python

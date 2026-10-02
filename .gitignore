@@ -1,0 +1,25 @@
+# Secrets locaux
+.env
+
+# Données téléchargées / générées (rejouables depuis les sources)
+data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# dbt
+target/
+dbt_packages/
+logs/
+
+# Base interne de Mage (historique des runs, cache)
+mage/mage_data/
+.user.yml
+
+# Réglages locaux de Claude Code
+.claude/settings.local.json
+
+# Projet perso, hors dépôt
+NeoSys/

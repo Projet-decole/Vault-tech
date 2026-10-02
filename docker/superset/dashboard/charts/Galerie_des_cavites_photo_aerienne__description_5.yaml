@@ -1,0 +1,27 @@
+slice_name: "Galerie des cavit\xE9s (photo a\xE9rienne + description)"
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 4__table
+  viz_type: table
+  query_mode: raw
+  all_columns:
+  - photo
+  - nom
+  - type_cavite
+  - nom_commune
+  - commentaires
+  order_by_cols:
+  - '["nom_commune", true]'
+  row_limit: 500
+  allow_render_html: true
+  include_search: true
+  page_length: 10
+  adhoc_filters: []
+query_context: null
+cache_timeout: null
+uuid: 2c4f0b98-874b-4a64-ab05-a72d376e1f13
+version: 1.0.0
+dataset_uuid: 216b6a2d-d98d-4476-a094-2136c6484d1e

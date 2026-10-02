@@ -1,0 +1,10 @@
+# Pipeline de modélisation : PostgreSQL silver -> dbt (staging, gold) -> tests + documentation
+blocks:
+- name: run_dbt_build
+  uuid: run_dbt_build
+  type: custom
+  upstream_blocks: []
+  downstream_blocks: []
+name: build_gold
+uuid: build_gold
+type: python

@@ -1,0 +1,41 @@
+slice_name: "Carte des parcelles et cavit\xE9s"
+description: null
+certified_by: null
+certification_details: null
+viz_type: deck_geojson
+params:
+  datasource: 3__table
+  viz_type: deck_geojson
+  geojson: geojson
+  row_limit: 100000
+  filter_nulls: true
+  adhoc_filters: []
+  mapbox_style: https://tile.openstreetmap.org/{z}/{x}/{y}.png
+  autozoom: true
+  viewport:
+    longitude: 6.2
+    latitude: 49.3
+    zoom: 10
+    bearing: 0
+    pitch: 0
+  filled: true
+  stroked: true
+  extruded: false
+  fill_color_picker:
+    r: 0
+    g: 0
+    b: 0
+    a: 0
+  stroke_color_picker:
+    r: 0
+    g: 0
+    b: 0
+    a: 0
+  line_width: 1
+  line_width_unit: pixels
+  point_radius_scale: 25
+query_context: null
+cache_timeout: null
+uuid: 69e5d183-5865-449f-afcd-d9ab48828240
+version: 1.0.0
+dataset_uuid: 1db5a583-154d-41af-8229-c4935da1ab1d

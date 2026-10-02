@@ -1,0 +1,232 @@
+dashboard_title: "Cavit\xE9s & parcelles"
+description: null
+css: ''
+slug: cavites-parcelles
+certified_by: ''
+certification_details: ''
+published: false
+uuid: 62d73521-5e68-4e98-8a74-89e0b4bfefa3
+position:
+  CHART-bar:
+    children: []
+    id: CHART-bar
+    meta:
+      chartId: 2
+      height: 50
+      sliceName: "Top 25 des communes : % de parcelles expos\xE9es (toutes communes,\
+        \ hors filtre)"
+      uuid: b1ebcb47-39f6-49c9-91b4-d76bc90b1e9f
+      width: 8
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-chiffres
+    type: CHART
+  CHART-big:
+    children: []
+    id: CHART-big
+    meta:
+      chartId: 3
+      height: 50
+      sliceName: Parcelles en exposition forte (< 200 m)
+      uuid: 9d72672c-73a4-46d0-901f-92f0564e94ee
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-chiffres
+    type: CHART
+  CHART-carte:
+    children: []
+    id: CHART-carte
+    meta:
+      chartId: 4
+      height: 100
+      sliceName: "Carte des parcelles et cavit\xE9s"
+      uuid: 69e5d183-5865-449f-afcd-d9ab48828240
+      width: 9
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-carte
+    type: CHART
+  CHART-galerie:
+    children: []
+    id: CHART-galerie
+    meta:
+      chartId: 5
+      height: 110
+      sliceName: "Galerie des cavit\xE9s (photo a\xE9rienne + description)"
+      uuid: 2c4f0b98-874b-4a64-ab05-a72d376e1f13
+      width: 8
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-medias
+    type: CHART
+  CHART-mots:
+    children: []
+    id: CHART-mots
+    meta:
+      chartId: 6
+      height: 110
+      sliceName: "Ce que disent les descriptions de cavit\xE9s (MongoDB)"
+      uuid: adb8d32c-0cb8-4b33-8a30-dbc9714503a1
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-medias
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children:
+    - ROW-chiffres
+    - ROW-carte
+    - ROW-medias
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: "Cavit\xE9s & parcelles"
+    type: HEADER
+  MARKDOWN-legende:
+    children: []
+    id: MARKDOWN-legende
+    meta:
+      code: "### L\xE9gende\n<span style=\"color:#2171b5\">\u25A0</span> **Parcelle**\
+        \ cadastrale (contour bleu)\n\n<span style=\"color:#e31a1c\">\u25CF</span>\
+        \ **Cavit\xE9** souterraine connue (BRGM),\n\xE0 moins de 500 m d'une parcelle\n\
+        \n---\nFiltrez par commune avec le panneau de gauche.\nSans filtre, la carte\
+        \ charge ~80 000 parcelles : patientez quelques secondes."
+      height: 100
+      width: 3
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-carte
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+  ROW-carte:
+    children:
+    - CHART-carte
+    - MARKDOWN-legende
+    id: ROW-carte
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+  ROW-chiffres:
+    children:
+    - CHART-big
+    - CHART-bar
+    id: ROW-chiffres
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+  ROW-medias:
+    children:
+    - CHART-galerie
+    - CHART-mots
+    id: ROW-medias
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+metadata:
+  chart_configuration:
+    '1':
+      id: 1
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 2
+        - 3
+    '2':
+      id: 2
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 1
+        - 3
+  global_chart_configuration:
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    chartsInScope:
+    - 1
+    - 2
+    - 3
+  native_filter_configuration:
+  - id: NATIVE_FILTER-SbJJO5K0KuCsHgTki6XSD
+    type: NATIVE_FILTER
+    name: Commune
+    filterType: filter_select
+    description: "Obligatoire : ~1 million de parcelles au total, la carte affiche\
+      \ une commune \xE0 la fois."
+    targets:
+    - column:
+        name: nom_commune
+      datasetUuid: c3eb531a-7b9c-4d75-9558-1e530344832f
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded:
+      - 2
+      - 6
+    controlValues:
+      enableEmptyFilter: true
+      defaultToFirstItem: false
+      creatable: true
+      multiSelect: true
+      searchAllOptions: true
+      inverseSelection: false
+    defaultDataMask:
+      filterState:
+        value:
+        - Veckring
+      extraFormData:
+        filters:
+        - col: nom_commune
+          op: IN
+          val:
+          - Veckring
+      ownState: {}
+    cascadeParentIds: []
+    sortMetric: null
+    chartsInScope:
+    - 3
+    - 4
+    - 5
+  chart_customization_config: []
+  map_label_colors:
+    aucune: '#1FA8C9'
+    forte: '#454E7C'
+    proximite: '#5AC189'
+    MAX(pct_parcelles_exposees): '#1FA8C9'
+  color_scheme: ''
+  refresh_frequency: 0
+  color_scheme_domain: []
+  expanded_slices: {}
+  label_colors: {}
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+theme_uuid: null
+version: 1.0.0

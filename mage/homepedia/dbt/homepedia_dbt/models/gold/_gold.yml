@@ -1,0 +1,95 @@
+# Documentation et tests des modèles gold (lus par Superset)
+version: 2
+
+models:
+  - name: parcelles_exposition_cavites
+    description: >
+      Une ligne par parcelle du périmètre : nombre de cavités souterraines à moins de 200 m et 500 m,
+      distance à la plus proche, et classe d'exposition. Distances en mètres (Lambert-93).
+      Seules les cavités à localisation fiable sont prises en compte.
+    columns:
+      - name: id_parcelle
+        description: Identifiant cadastral (14 caractères).
+        tests: [unique, not_null]
+      - name: code_insee
+        description: Commune de la parcelle.
+        tests:
+          - not_null
+          # chaque commune d'une parcelle doit exister dans la synthèse par commune
+          - relationships:
+              to: ref('communes_synthese')
+              field: code_insee
+      - name: nom_commune
+        description: Nom de la commune (depuis config/perimetre.yml).
+        tests: [not_null]   # échoue si une commune a des parcelles mais n'est pas dans le périmètre
+      - name: classe_exposition
+        description: "forte : cavité à moins de 200 m ; proximite : à moins de 500 m ; aucune : au-delà."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['aucune', 'proximite', 'forte']
+      - name: distance_cavite_la_plus_proche_m
+        description: Distance en mètres entre le contour de la parcelle et la cavité la plus proche (0 si elle est dedans).
+        tests: [not_null]
+      - name: longitude
+        description: Point intérieur de la parcelle, en GPS (EPSG:4326), pour les cartes.
+      - name: latitude
+        description: Point intérieur de la parcelle, en GPS (EPSG:4326), pour les cartes.
+
+  - name: carte_elements
+    description: >
+      Éléments à dessiner sur la carte Superset (deck.gl GeoJson) : contours des parcelles (bleu)
+      et cavités à moins de 500 m d'une parcelle (rouge). Une ligne = un objet GeoJSON Feature.
+    columns:
+      - name: type_element
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['parcelle', 'cavite']
+      - name: identifiant
+        description: id_parcelle ou id_cavite selon type_element.
+        tests: [not_null]
+      - name: nom_commune
+        description: Commune de la parcelle (ou, pour une cavité, de la parcelle la plus proche).
+        tests: [not_null]
+      - name: geojson
+        description: Feature GeoJSON (EPSG:4326) avec fillColor / strokeColor dans ses propriétés.
+        tests: [not_null]
+
+  - name: galerie_cavites
+    description: >
+      Une ligne par cavité de la carte ayant une photo aérienne : identité, commune, description
+      en texte libre et photo (fichier du bucket S3 "medias", colonne HTML pour Superset).
+    columns:
+      - name: id_cavite
+        tests: [unique, not_null]
+      - name: nom_commune
+        tests: [not_null]
+      - name: url_photo
+        description: Adresse de la photo dans le bucket S3, lisible par le navigateur.
+        tests: [not_null]
+
+  - name: cavites_mots_cles
+    description: >
+      Mots-clés métier trouvés dans les fiches cavités (nom + commentaires, recherche plein texte
+      MongoDB en français : un mot trouve aussi ses variantes). Une ligne par (mot-clé, département).
+      Attention : en 2026-09, seules les fiches de Moselle ont des commentaires ; le Rhône n'est
+      interrogé que sur les noms.
+    columns:
+      - name: mot_cle
+        tests: [not_null]
+      - name: departement
+        tests: [not_null]
+      - name: pct_fiches
+        description: Part des fiches cavités du département qui mentionnent le mot (%).
+        tests: [not_null]
+
+  - name: communes_synthese
+    description: Une ligne par commune du périmètre (synthèse de l'exposition aux cavités).
+    columns:
+      - name: code_insee
+        tests: [unique, not_null]
+      - name: nom_commune
+        tests: [not_null]
+      - name: pct_parcelles_exposees
+        description: Part des parcelles en exposition forte ou proximité (%).
