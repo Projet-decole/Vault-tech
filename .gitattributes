@@ -1,0 +1,11 @@
+# Les scripts exécutés DANS les conteneurs Linux (superset, seaweedfs...) doivent garder
+# des fins de ligne Unix (LF). Sans cette règle, sous Windows avec core.autocrlf=true,
+# le clone convertit les .sh en CRLF et les conteneurs refusent de démarrer :
+#   - superset  : "exec /app/homepedia/bootstrap.sh: no such file or directory" (shebang #!/bin/bash\r)
+#   - seaweedfs : "set: line 3: illegal option -" (set -e\r)
+*.sh text eol=lf
+
+# Les fichiers d'environnement lus par les conteneurs : LF également (un \r se retrouverait
+# collé à la fin des valeurs, ex. un mot de passe ou une clé S3).
+*.env text eol=lf
+hadoop.env text eol=lf
