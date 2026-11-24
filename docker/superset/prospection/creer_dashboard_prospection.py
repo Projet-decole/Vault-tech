@@ -8,7 +8,8 @@ Les mêmes cavités se lisent de deux façons :
 Onglet « France » : chiffres clés, carte multi-échelle (iframe vers le conteneur "carte"), puis un
 tableau triable, filtrable et exportable (CSV) par niveau : régions, départements, communes.
 Filtres : Région, puis Département (en cascade). La carte, dans son iframe, ne suit pas les filtres.
-Onglet « Commune » : renvoie pour l'instant vers le dashboard « Cavités & parcelles ».
+Onglet « Commune » : les graphiques et le filtre Commune du dashboard « Cavités & parcelles »,
+repris tels quels (ce dashboard doit exister : il est importé au premier démarrage de Superset).
 
 Usage (depuis la racine du projet, Superset et le conteneur carte lancés, tables gold à jour) :
     python3 docker/superset/prospection/creer_dashboard_prospection.py
@@ -158,37 +159,56 @@ def main():
         ajouter(f'CHART-{tableaux[table]}', 'CHART', p + [f'ROW-{table}'],
                 meta={'chartId': tableaux[table], 'width': 12, 'height': 90})
 
+    # --- Onglet Commune : la mise en page et les graphiques du dashboard « Cavités & parcelles »,
+    # repris tels quels (mêmes graphiques, rattachés aux deux dashboards). Les identifiants des blocs
+    # reçoivent le suffixe "-commune" pour ne pas entrer en collision avec ceux de l'onglet France.
+    ancien = api.appel('GET', '/api/v1/dashboard/cavites-parcelles')['result']
+    ancienne_page = json.loads(ancien['position_json'])
+    anciens_filtres = json.loads(ancien['json_metadata']).get('native_filter_configuration', [])
     p_commune = ['ROOT_ID', 'TABS-principal', 'TAB-commune']
-    ajouter('TAB-commune', 'TAB', p_commune[:2], ['ROW-commune'], {'text': 'Commune', 'defaultText': 'Onglet'})
-    ajouter('ROW-commune', 'ROW', p_commune, ['MARKDOWN-commune'], {'background': 'BACKGROUND_TRANSPARENT'})
-    ajouter('MARKDOWN-commune', 'MARKDOWN', p_commune + ['ROW-commune'], meta={'width': 12, 'height': 30, 'code': (
-        '### Le détail d\'une commune\n\n'
-        'Carte des parcelles et des cavités, parcelles exposées, photos aériennes, mots-clés des descriptions : '
-        f'dashboard [Cavités & parcelles]({URL}/superset/dashboard/cavites-parcelles/).\n\n'
-        f'{COUVERTURE}.')})
+    lignes = ancienne_page['GRID_ID']['children']
+    ajouter('TAB-commune', 'TAB', p_commune[:2], [f'{l}-commune' for l in lignes],
+            {'text': 'Commune', 'defaultText': 'Onglet'})
+    graphiques_commune = []
+    for ligne in lignes:
+        bloc = ancienne_page[ligne]
+        ajouter(f'{ligne}-commune', 'ROW', p_commune, [f'{e}-commune' for e in bloc['children']], bloc.get('meta'))
+        for enfant in bloc['children']:
+            e = ancienne_page[enfant]
+            ajouter(f'{enfant}-commune', e['type'], p_commune + [f'{ligne}-commune'], meta=e['meta'])
+            if e['type'] == 'CHART':
+                graphiques_commune.append(e['meta']['chartId'])
 
-    # --- Filtres : Région, puis Département (ses choix se limitent à la région choisie) ---
-    def filtre(id_, nom, colonne, parents=(), exclus=()):
+    # --- Filtres. Région, puis Département (ses choix se limitent à la région choisie) : onglet France.
+    # Commune (obligatoire, repris de l'ancien dashboard) : onglet Commune.
+    def filtre(id_, nom, colonne, onglet, parents=(), exclus=()):
         return {'id': id_, 'name': nom, 'filterType': 'filter_select', 'type': 'NATIVE_FILTER',
                 'targets': [{'datasetId': communes, 'column': {'name': colonne}}],
                 'controlValues': {'multiSelect': True, 'enableEmptyFilter': False, 'inverseSelection': False,
                                   'searchAllOptions': False, 'defaultToFirstItem': False},
                 'defaultDataMask': {'extraFormData': {}, 'filterState': {}, 'ownState': {}},
-                'cascadeParentIds': list(parents), 'scope': {'rootPath': ['ROOT_ID'], 'excluded': list(exclus)},
+                'cascadeParentIds': list(parents), 'scope': {'rootPath': [onglet], 'excluded': list(exclus)},
                 'description': ''}
 
-    metadata = {'native_filter_configuration': [
-        filtre('NATIVE_FILTER-region', 'Région', 'nom_region'),
+    filtres = [
+        filtre('NATIVE_FILTER-region', 'Région', 'nom_region', 'TAB-france'),
         # le tableau des régions n'a pas de colonne département : hors de portée de ce filtre
-        filtre('NATIVE_FILTER-departement', 'Département', 'nom_departement',
+        filtre('NATIVE_FILTER-departement', 'Département', 'nom_departement', 'TAB-france',
                parents=['NATIVE_FILTER-region'], exclus=[tableaux['cavites_par_region']]),
-    ], 'cross_filters_enabled': False}
+    ]
+    for f in anciens_filtres:
+        f = dict(f, scope=dict(f['scope'], rootPath=['TAB-commune']))
+        f.pop('chartsInScope', None)   # recalculé par Superset
+        filtres.append(f)
+    metadata = {'native_filter_configuration': filtres, 'cross_filters_enabled': False}
 
     tableau = api.appel('POST', '/api/v1/dashboard/', {
         'dashboard_title': TITRE, 'slug': SLUG, 'published': True,
         'position_json': json.dumps(position), 'json_metadata': json.dumps(metadata)})['id']
     for g in chiffres + list(tableaux.values()):   # rattacher chaque graphique au dashboard
         api.appel('PUT', f'/api/v1/chart/{g}', {'dashboards': [tableau]})
+    for g in graphiques_commune:   # les graphiques repris restent aussi dans « Cavités & parcelles »
+        api.appel('PUT', f'/api/v1/chart/{g}', {'dashboards': [ancien['id'], tableau]})
     print(f'Dashboard {tableau} : {URL}/superset/dashboard/{SLUG}/')
 
 
