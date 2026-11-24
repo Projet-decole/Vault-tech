@@ -53,7 +53,7 @@
     <option value="reunion">La Réunion</option>
     <option value="mayotte">Mayotte</option>
   </select>
-  <p class="source">Cavités : BRGM · Contours : Etalab · Fond : © OpenStreetMap, © CARTO</p>
+  <p class="source">Cavités : BRGM · Contours : Etalab · Fond : © OpenStreetMap</p>
 </div>
 
 <div id="erreur" class="panneau">
@@ -128,14 +128,16 @@ const carte = new maplibregl.Map({
   style: {
     version: 8,
     sources: {
-      // Fond de carte clair, en images (raster), sous les couleurs
+      // Fond de carte OpenStreetMap, en images (raster), sans clé (CARTO en demande une depuis 2026)
       fond: {
-        type: 'raster', tileSize: 256,
-        tiles: ['a', 'b', 'c'].map(s => `https://${s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png`),
-        attribution: '© OpenStreetMap contributors, © CARTO',
+        type: 'raster', tileSize: 256, maxzoom: 19,
+        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       },
     },
-    layers: [{ id: 'fond', type: 'raster', source: 'fond' }],
+    // Fond passé en gris clair : les couleurs de la densité restent les seules à lire
+    layers: [{ id: 'fond', type: 'raster', source: 'fond',
+               paint: { 'raster-saturation': -1, 'raster-brightness-min': 0.15, 'raster-contrast': -0.2 } }],
   },
 });
 carte.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
