@@ -63,7 +63,9 @@ def main():
             texte('zOuvrage').cast('double').alias('altitude_m'),
             F.col('localisation_fiable'),
             # Point GeoJSON [longitude, latitude] : MongoDB sait l'indexer (index "2dsphere")
-            F.when(F.col('lon').isNotNull(), F.struct(
+            # Seulement si les coordonnées sont des degrés valides : en outre-mer, certaines fiches donnent
+            # des x/y que la conversion envoie hors du globe, et UN seul point invalide fait échouer l'index.
+            F.when(F.col('lon').between(-180, 180) & F.col('lat').between(-90, 90), F.struct(
                 F.lit('Point').alias('type'),
                 F.array('lon', 'lat').alias('coordinates'),
             )).alias('point'),

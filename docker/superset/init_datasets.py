@@ -5,6 +5,7 @@ Exécuté par bootstrap.sh à chaque démarrage : si dbt a ajouté une colonne, 
 from superset.app import create_app
 
 TABLES_GOLD = ['parcelles_exposition_cavites', 'communes_synthese', 'carte_elements',
+               'cavites_par_commune', 'cavites_par_departement', 'cavites_par_region',
                'galerie_cavites', 'cavites_mots_cles']
 
 app = create_app()

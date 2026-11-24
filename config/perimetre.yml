@@ -12,6 +12,11 @@
 # Le département est déduit du code INSEE (2 premiers caractères, 3 pour l'outre-mer : 971...) :
 # on peut mélanger des communes de plusieurs départements.
 
+# Cavités de TOUTE la France (≈ 100 fichiers Géorisques), indépendamment des parcelles ci-dessous :
+# couche nationale légère pour les cartes par commune, département et région.
+# false : seulement les départements du périmètre.
+cavites_france: true
+
 # Départements ENTIERS : toutes leurs communes sont ajoutées automatiquement.
 # Liste lue sur geo.api.gouv.fr à chaque exécution (villes à arrondissements : les arrondissements).
 # Une commune listée aussi dans "communes" n'est comptée qu'une fois.

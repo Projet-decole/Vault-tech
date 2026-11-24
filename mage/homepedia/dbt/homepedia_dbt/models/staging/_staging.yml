@@ -23,3 +23,18 @@ models:
         tests: [not_null]
       - name: geom
         description: Point de la cavité, EPSG:2154. NULL pour les 5 cavités confidentielles.
+
+  - name: stg_cavites_territoire
+    description: Chaque cavité rattachée à sa commune actuelle (COG 2026), via la table de correspondance.
+    columns:
+      - name: id_cavite
+        tests: [unique, not_null]
+      - name: commune_resolue
+        description: Faux si le code commune du BRGM est inconnu du COG. Toléré, mais au-delà de 1 % on veut le savoir.
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true]
+              quote: false
+              config:
+                severity: warn

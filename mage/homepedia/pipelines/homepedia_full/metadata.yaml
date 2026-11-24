@@ -38,6 +38,15 @@ blocks:
   type: data_exporter
   upstream_blocks: [load_perimetre]
   downstream_blocks: [run_dbt_build]
+- name: ingest_referentiel_geo
+  uuid: ingest_referentiel_geo
+  type: custom
+  # référentiel national (COG INSEE + contours Etalab) : ne dépend pas du périmètre
+  upstream_blocks: []
+  downstream_blocks: [run_clean_referentiel]
+  retry_config:
+    retries: 2
+    delay: 30
 # --- 2. Nettoyage Spark (silver) : un job après l'autre pour ménager la RAM ---
 - name: run_clean_cadastre
   uuid: run_clean_cadastre
@@ -53,12 +62,17 @@ blocks:
   uuid: run_stats_communes
   type: custom
   upstream_blocks: [run_clean_cavites]
+  downstream_blocks: [run_clean_referentiel]
+- name: run_clean_referentiel
+  uuid: run_clean_referentiel
+  type: custom
+  upstream_blocks: [run_stats_communes, ingest_referentiel_geo]
   downstream_blocks: [run_cavites_mongo]
 # --- 3. Textes (bonus) : fiches complètes dans MongoDB, recherche plein texte → Postgres ---
 - name: run_cavites_mongo
   uuid: run_cavites_mongo
   type: custom
-  upstream_blocks: [run_stats_communes]
+  upstream_blocks: [run_clean_referentiel]
   downstream_blocks: [mongo_index_et_mots_cles]
 - name: mongo_index_et_mots_cles
   uuid: mongo_index_et_mots_cles

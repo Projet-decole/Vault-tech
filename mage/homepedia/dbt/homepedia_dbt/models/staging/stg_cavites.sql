@@ -29,10 +29,14 @@ select
     date_maj,
     -- Position utilisable pour un calcul de distance ?
     -- Non si pas de coordonnées, ou si le BRGM a seulement placé la cavité au centre de la commune.
-    (srid is not null and positionnement is distinct from 'centroide de commune') as localisation_fiable,
+    (srid is not null and positionnement is distinct from 'centroide de commune'
+     and departement not like '97%') as localisation_fiable,
     -- x, y dans leur système d'origine (srid) → Lambert-93 (2154). NULL si pas de coordonnées.
+    -- Métropole seulement : Lambert II étendu et Lambert-93 ne valent pas en outre-mer (départements 97x),
+    -- où la conversion sort du globe et fait échouer toute la table (vécu le 24/11 avec les cavités de France).
+    -- Les cavités d'outre-mer restent comptées par commune grâce à leur code INSEE (stg_cavites_territoire).
     case
-        when srid is not null
+        when srid is not null and departement not like '97%'
         then ST_Transform(ST_SetSRID(ST_MakePoint(x, y), srid), 2154)
     end as geom
 from {{ source('silver', 'cavites') }}

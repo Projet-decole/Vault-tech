@@ -58,3 +58,38 @@ sources:
               - accepted_values:
                   values: [27572, 4326]
                   quote: false
+      - name: ref_regions
+        description: Régions de France (COG INSEE 2026) avec leur contour Etalab simplifié à 100 m (GeoJSON, EPSG:4326).
+        columns:
+          - name: code_region
+            tests: [unique, not_null]
+          - name: geometrie_geojson
+            tests: [not_null]
+      - name: ref_departements
+        description: Départements de France (COG INSEE 2026) avec leur région et leur contour.
+        columns:
+          - name: code_departement
+            tests: [unique, not_null]
+          - name: geometrie_geojson
+            tests: [not_null]
+      - name: ref_communes
+        description: >
+          Communes de plein exercice de France (COG INSEE 2026) avec département, région et contour.
+          Les arrondissements de Paris, Lyon et Marseille sont ramenés à leur ville (voir ref_correspondance_communes).
+        columns:
+          - name: code_insee
+            tests: [unique, not_null]
+          - name: geometrie_geojson
+            tests:
+              - not_null:
+                  config:
+                    severity: warn
+      - name: ref_correspondance_communes
+        description: >
+          Tout code commune connu du COG (commune actuelle, arrondissement, ancienne commune fusionnée)
+          vers le code de la commune actuelle. Règles reprises du travail de Frank (pipeline/cleaning/geo.py).
+        columns:
+          - name: code
+            tests: [unique, not_null]
+          - name: code_insee
+            tests: [not_null]

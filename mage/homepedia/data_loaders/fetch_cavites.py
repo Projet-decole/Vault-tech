@@ -4,13 +4,17 @@ Source : export CSV Géorisques (l'API officielle était en 503 au 2026-09-25).
 Voir docs/fiches-sources/cavites-bdcavites.md.
 On garde TOUT le département (pas de filtre par commune) : une cavité juste de l'autre
 côté d'une limite communale peut être proche d'une parcelle du périmètre.
+Avec "cavites_france: true" dans config/perimetre.yml, on prend TOUS les départements de France
+(couche nationale légère), même ceux qui n'ont pas de parcelles dans le périmètre.
 """
 import csv
 import io
 import json
+import os
 from datetime import datetime, timezone
 
 import pandas as pd
+import yaml
 
 from homepedia.utils.http import telecharger
 
@@ -20,13 +24,14 @@ if 'test' not in globals():
     from mage_ai.data_preparation.decorators import test
 
 URL_MODELE = 'https://www.georisques.gouv.fr/webappReport/ws/cavites/departements/{dep}/fiches.csv?'
+GEO_API_DEPARTEMENTS = 'https://geo.api.gouv.fr/departements?fields=code'
 
 
 @data_loader
 def fetch_cavites(perimetre: pd.DataFrame, *args, **kwargs) -> pd.DataFrame:
     ingere_le = datetime.now(timezone.utc).isoformat(timespec='seconds')
     lignes = []
-    for dep in perimetre['departement'].unique():
+    for dep in departements_des_cavites(perimetre):
         url = URL_MODELE.format(dep=dep)
         r = telecharger(url)
         # utf-8-sig : retire le BOM en tête de fichier (sinon 1re colonne = '﻿id')
@@ -46,7 +51,18 @@ def fetch_cavites(perimetre: pd.DataFrame, *args, **kwargs) -> pd.DataFrame:
             })
             nb += 1
         print(f'Département {dep} : {nb} cavités — {url}')
+    print(f'Total : {len(lignes)} cavités')
     return pd.DataFrame(lignes)
+
+
+def departements_des_cavites(perimetre: pd.DataFrame) -> list:
+    """Départements dont on télécharge les cavités : toute la France si cavites_france est vrai
+    dans config/perimetre.yml, sinon seulement ceux du périmètre."""
+    with open(os.environ['HOMEPEDIA_CONFIG'], encoding='utf-8') as f:
+        conf = yaml.safe_load(f)
+    if conf.get('cavites_france'):
+        return [d['code'] for d in telecharger(GEO_API_DEPARTEMENTS).json()]
+    return list(perimetre['departement'].unique())
 
 
 @test

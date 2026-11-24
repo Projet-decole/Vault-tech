@@ -93,3 +93,34 @@ models:
         tests: [not_null]
       - name: pct_parcelles_exposees
         description: Part des parcelles en exposition forte ou proximité (%).
+
+  - name: cavites_par_commune
+    description: >
+      Toutes les communes de France avec leurs cavités (total, par famille, pour 100 km²) et leur contour.
+      Niveau « commune » de l'analyse multi-échelle ; 0 = aucune cavité connue.
+    columns:
+      - name: code_insee
+        tests: [unique, not_null]
+      - name: code_departement
+        tests:
+          - not_null
+          - relationships:
+              to: ref('cavites_par_departement')
+              field: code_departement
+      - name: geometrie_geojson
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: cavites_par_departement
+    description: Cavités par département (somme des communes), avec le contour du département.
+    columns:
+      - name: code_departement
+        tests: [unique, not_null]
+
+  - name: cavites_par_region
+    description: Cavités par région (somme des communes), avec le contour de la région.
+    columns:
+      - name: code_region
+        tests: [unique, not_null]
