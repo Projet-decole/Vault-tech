@@ -222,16 +222,18 @@ services:
     restart: unless-stopped
 
   carte:
-    # La page de la carte multi-échelle (HTML + MapLibre GL), servie telle quelle par nginx.
-    # Ouverte seule ou intégrée au dashboard Superset dans une iframe.
+    # Porte d'entrée unique (nginx) : Superset, la page de la carte (MapLibre GL) et les tuiles de Martin
+    # sous la même adresse, pour que la carte et les filtres du dashboard se parlent (voir nginx.conf).
     image: nginx:1.31.7-alpine
     container_name: homepedia-carte
     ports:
-      - "8090:80"     # http://localhost:8090
+      - "8090:80"     # http://localhost:8090 : Superset ; /carte/ : la carte seule ; /tuiles/ : Martin
     volumes:
       - ./docker/carte/page:/usr/share/nginx/html:ro
+      - ./docker/carte/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - martin
+      - superset
     restart: unless-stopped
 
 volumes:

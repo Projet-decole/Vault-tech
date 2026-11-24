@@ -68,6 +68,7 @@ postgres:
         code_insee: text
         nom_commune: text
         nom_departement: text
+        nom_region: text        # pour griser les communes hors du filtre Région du dashboard
         nb_cavites: int8
         cavites_pour_100_km2: numeric
         superficie_km2: numeric

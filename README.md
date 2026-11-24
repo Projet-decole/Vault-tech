@@ -82,9 +82,9 @@ Puis ouvrir le tableau de bord : http://localhost:8088/superset/dashboard/cavite
 
 | Interface | URL | Identifiants | À quoi ça sert |
 |---|---|---|---|
-| **Superset** | http://localhost:8088 | `admin` / `SUPERSET_ADMIN_PASSWORD` du `.env` | Tableaux de bord, SQL Lab |
-| **Carte multi-échelle** | http://localhost:8090 | — | Une carte, trois niveaux selon le zoom (régions, départements, communes), coloriée par densité de cavités. Demande WebGL (Firefox, Chrome). Aussi dans Superset, dashboard « Prospection » |
-| **Dashboard Prospection** | http://localhost:8088/superset/dashboard/prospection/ | comme Superset | Le parcours d'un prospecteur, de la France à la commune : chiffres clés, carte multi-échelle, tableaux triables et exportables par région, département et commune, filtres Région et Département. Créé par `python3 docker/superset/prospection/creer_dashboard_prospection.py` (relançable) |
+| **Superset** | http://localhost:8090 (ou directement http://localhost:8088) | `admin` / `SUPERSET_ADMIN_PASSWORD` du `.env` | Tableaux de bord, SQL Lab. Passer par le port **8090** (nginx, `docker/carte/nginx.conf`) : la carte y partage l'adresse de Superset et dialogue avec ses filtres |
+| **Carte multi-échelle** | http://localhost:8090/carte/ | — | Une carte, trois niveaux selon le zoom (régions, départements, communes), coloriée par densité de cavités. Demande WebGL (Firefox, Chrome). Aussi dans le dashboard « Prospection » |
+| **Dashboard Prospection** | http://localhost:8090/superset/dashboard/prospection/ | comme Superset | Le parcours d'un prospecteur, de la France à la commune. Onglet France : chiffres clés, carte, tableaux triables et exportables par région, département et commune, filtres Région et Département. Onglet Commune : le détail d'une commune. **La carte et les filtres se suivent** : un clic sur la carte filtre le dashboard, un filtre grise et recentre la carte (seulement par le port 8090). Créé par `python3 docker/superset/prospection/creer_dashboard_prospection.py` (relançable) ; emprises des territoires : `sh docker/carte/generer_emprises.sh` |
 | **Martin** (tuiles) | http://localhost:3010/catalog | — | Serveur de tuiles vectorielles de la carte (config : `docker/carte/martin.yaml`) ; une tuile : `/cavites_region/{z}/{x}/{y}` |
 | **Mage** | http://localhost:6789 | `admin@admin.com` / `admin` | Pipelines, blocs, logs, triggers |
 | **dbt docs** | http://localhost:8081 | — | Doc des tables, graphe de lignage (bouton en bas à droite) |

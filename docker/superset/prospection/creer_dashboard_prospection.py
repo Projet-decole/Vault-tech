@@ -26,7 +26,8 @@ from creer_test_echelle import URL, Client  # noqa: E402
 TITRE = 'Prospection : cavités de France'
 SLUG = 'prospection'
 PREFIXE = 'Prospection · '   # nom des graphiques créés ici (pour les retrouver et les supprimer)
-CARTE_URL = 'http://localhost:8090'
+# Même adresse que Superset vu par nginx (port 8090) : la carte peut alors lire et modifier les filtres
+CARTE_URL = 'http://localhost:8090/carte/'
 COUVERTURE = 'Parcelles analysées : Rhône, Loire et 6 communes de Moselle'
 
 # Libellés lisibles des colonnes (verbose_name des datasets), partagés par les trois niveaux

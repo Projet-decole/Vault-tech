@@ -34,6 +34,8 @@
     .maplibregl-popup-content table { border-collapse: collapse; }
     .maplibregl-popup-content td { padding: 1px 0; }
     .maplibregl-popup-content td + td { padding-left: 10px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+    #selection { margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: #fff4e5; border: 1px solid #f5c58a; }
+    #selection button { margin-top: 4px; font: inherit; font-size: 12px; cursor: pointer; }
     #erreur { display: none; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 360px; }
   </style>
 </head>
@@ -53,6 +55,11 @@
     <option value="reunion">La Réunion</option>
     <option value="mayotte">Mayotte</option>
   </select>
+  <div id="selection" hidden>
+    <span>Filtre du tableau de bord : <strong></strong></span>
+    <button type="button" title="Retirer le filtre">Tout afficher</button>
+  </div>
+  <p id="astuce" class="source" hidden>Cliquez sur un territoire pour filtrer le tableau de bord.</p>
   <p class="source">Cavités : BRGM · Contours : Etalab · Fond : © OpenStreetMap</p>
 </div>
 
@@ -70,7 +77,8 @@
 //   5,5 à 8         départements
 //   zoom ≥ 8        communes
 // ---------------------------------------------------------------------------------------------
-const MARTIN = `${location.protocol}//${location.hostname}:3010`;
+// Les tuiles passent par la même adresse que la page (nginx les relaie vers Martin, voir nginx.conf)
+const MARTIN = `${location.origin}/tuiles`;
 
 const NIVEAUX = [
   { id: 'region',      source: 'cavites_region',      cle: 'code_region',      nom: 'nom_region',
@@ -165,6 +173,7 @@ carte.on('load', () => {
     });
   }
   majNiveau();
+  brancherDashboard();
 });
 
 // Le titre du niveau suit le zoom
@@ -217,6 +226,135 @@ carte.on('mousemove', (e) => {
 carte.on('mouseout', () => { oublierSurvol(); bulle.remove(); });
 
 document.getElementById('aller').addEventListener('change', (e) => carte.flyTo({ ...VUES[e.target.value], speed: 1.6 }));
+
+// ---------------------------------------------------------------------------------------------
+// Dialogue avec le dashboard Superset, quand la carte est dans son iframe et servie par la même
+// adresse que lui (http://localhost:8090). Ailleurs, la carte fonctionne seule.
+//
+// Superset garde les valeurs des filtres côté serveur et met dans l'adresse du dashboard une clé
+// (?native_filters_key=...). Dans les deux sens, on passe par cette clé :
+//   Superset → carte : toutes les secondes, la carte relit la clé ; si elle change, elle demande les
+//                      valeurs à Superset, grise ce qui est hors filtre et se recentre ;
+//   carte → Superset : un clic enregistre de nouvelles valeurs (nouvelle clé) et recharge le dashboard.
+// ---------------------------------------------------------------------------------------------
+const SLUG = (() => {
+  try {
+    if (window.parent === window) return null;
+    const m = window.parent.location.pathname.match(/\/superset\/dashboard\/([^/]+)\//);
+    return m ? m[1] : null;
+  } catch (e) { return null; }   // autre adresse : le navigateur interdit de lire la page parente
+})();
+let dashboard = null;            // { id, filtres: { 'Région': {id, colonne}, 'Département': ..., 'Commune': ... } }
+let emprises = null;             // rectangles englobants par nom (emprises.json, généré depuis PostGIS)
+let selection = { regions: [], departements: [] };
+let derniereCle;
+
+async function api(chemin, options = {}) {
+  const r = await fetch(chemin, { credentials: 'same-origin', ...options });
+  if (!r.ok) throw new Error(`${chemin} : ${r.status}`);
+  return r.json();
+}
+
+async function brancherDashboard() {
+  if (!SLUG) return;
+  try {
+    emprises = await (await fetch('emprises.json')).json();
+    const d = (await api(`/api/v1/dashboard/${SLUG}`)).result;
+    const filtres = {};
+    for (const f of JSON.parse(d.json_metadata).native_filter_configuration || []) {
+      filtres[f.name] = { id: f.id, colonne: f.targets[0].column.name };
+    }
+    dashboard = { id: d.id, filtres };
+    document.getElementById('astuce').hidden = false;
+    await lireFiltres();
+    setInterval(() => lireFiltres().catch(console.warn), 1000);
+  } catch (erreur) {
+    console.warn('Carte non reliée au dashboard :', erreur);
+  }
+}
+
+// Superset → carte
+async function lireFiltres() {
+  const cle = new URLSearchParams(window.parent.location.search).get('native_filters_key');
+  if (cle === derniereCle) return;
+  derniereCle = cle;
+  let etat = {};
+  if (cle) etat = JSON.parse((await api(`/api/v1/dashboard/${dashboard.id}/filter_state/${cle}`)).value || '{}');
+  const valeurs = (nom) => {
+    const f = dashboard.filtres[nom];
+    return (f && etat[f.id] && etat[f.id].filterState && etat[f.id].filterState.value) || [];
+  };
+  appliquerSelection({ regions: valeurs('Région'), departements: valeurs('Département') });
+}
+
+function appliquerSelection(sel) {
+  const change = JSON.stringify(sel) !== JSON.stringify(selection);
+  selection = sel;
+  for (const n of NIVEAUX) {
+    const conditions = [];
+    if (sel.regions.length) conditions.push(['in', ['get', 'nom_region'], ['literal', sel.regions]]);
+    if (sel.departements.length && n.id !== 'region') {
+      conditions.push(['in', ['get', 'nom_departement'], ['literal', sel.departements]]);
+    }
+    const dedans = conditions.length ? ['all', ...conditions] : true;
+    // hors filtre : presque transparent ; dans le filtre : comme d'habitude
+    carte.setPaintProperty(`${n.id}-aplat`, 'fill-opacity',
+      ['case', ['boolean', ['feature-state', 'survol'], false], 0.92, dedans, 0.72, 0.1]);
+    carte.setPaintProperty(`${n.id}-contour`, 'line-opacity', ['case', dedans, 1, 0.2]);
+  }
+  const noms = sel.departements.length ? sel.departements : sel.regions;
+  const bloc = document.getElementById('selection');
+  bloc.hidden = !noms.length;
+  bloc.querySelector('strong').textContent = noms.join(', ');
+  if (!change) return;
+  // recentrer sur la sélection (départements s'il y en a, sinon régions), ou revenir à la France
+  const rects = sel.departements.length ? sel.departements.map(n => emprises.departements[n])
+                                        : sel.regions.map(n => emprises.regions[n]);
+  const connus = rects.filter(Boolean);
+  if (!connus.length) { carte.flyTo({ ...VUES.metropole, speed: 1.6 }); return; }
+  const [o, s, e, n] = [Math.min(...connus.map(r => r[0])), Math.min(...connus.map(r => r[1])),
+                        Math.max(...connus.map(r => r[2])), Math.max(...connus.map(r => r[3]))];
+  carte.fitBounds([[o, s], [e, n]], { padding: 40, maxZoom: 9.5, duration: 1200 });
+}
+
+// carte → Superset : seuls les filtres donnés changent ; les autres reprennent leur valeur par défaut
+async function filtrerDashboard(valeurs) {
+  const masque = {};
+  for (const [nom, v] of Object.entries(valeurs)) {
+    const f = dashboard.filtres[nom];
+    if (!f) continue;
+    masque[f.id] = {
+      id: f.id, ownState: {},
+      filterState: { value: v.length ? v : null },
+      extraFormData: v.length ? { filters: [{ col: f.colonne, op: 'IN', val: v }] } : {},
+    };
+  }
+  const jeton = (await api('/api/v1/security/csrf_token/')).result;
+  const { key } = await api(`/api/v1/dashboard/${dashboard.id}/filter_state`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': jeton },
+    body: JSON.stringify({ value: JSON.stringify(masque) }),
+  });
+  const params = new URLSearchParams(window.parent.location.search);
+  params.delete('native_filters');
+  params.set('native_filters_key', key);
+  window.parent.location.search = params.toString();   // recharge le dashboard avec ces filtres
+}
+
+carte.on('click', (e) => {
+  if (!dashboard) return;
+  const n = niveauCourant();
+  const [f] = carte.queryRenderedFeatures(e.point, { layers: [`${n.id}-aplat`] });
+  if (!f) return;
+  const p = f.properties;
+  const valeurs = { 'Région': [p.nom_region], 'Département': n.id === 'region' ? [] : [p.nom_departement] };
+  // commune dont le cadastre est analysé : l'onglet Commune du dashboard s'ouvrira sur elle
+  if (n.id === 'commune' && p.nb_parcelles_analysees != null) valeurs['Commune'] = [p.nom_commune];
+  filtrerDashboard(valeurs).catch(err => console.warn('Filtre non appliqué :', err));
+});
+
+document.querySelector('#selection button').addEventListener('click', () => {
+  if (dashboard) filtrerDashboard({ 'Région': [], 'Département': [] }).catch(console.warn);
+});
 </script>
 </body>
 </html>
