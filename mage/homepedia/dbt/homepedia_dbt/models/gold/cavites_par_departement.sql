@@ -1,5 +1,6 @@
 -- Indicateurs « cavités » par département (≈ 100 lignes), somme des communes, avec le contour du département.
-{{ config(materialized='table') }}
+-- geom : le même contour en géométrie PostGIS, avec un index spatial, pour la carte en tuiles (Martin).
+{{ config(materialized='table', post_hook=["create index on {{ this }} using gist (geom)", "analyze {{ this }}"]) }}
 
 {% set colonnes = ['nb_cavites', 'nb_ouvrages_militaires', 'nb_cavites_naturelles', 'nb_ouvrages_civils',
                    'nb_carrieres', 'nb_caves', 'nb_indeterminees', 'superficie_km2'] %}
@@ -27,7 +28,8 @@ select
     {% endfor -%}
     round((100 * s.nb_cavites / nullif(s.superficie_km2, 0))::numeric, 2)          as cavites_pour_100_km2,
     round((100.0 * s.nb_communes_avec_cavite / nullif(s.nb_communes, 0))::numeric, 1) as pct_communes_avec_cavite,
-    d.geometrie_geojson
+    d.geometrie_geojson,
+    {{ contour_geom('d.geometrie_geojson') }}                    as geom
 from {{ source('silver', 'ref_departements') }} d
 join sommes s using (code_departement)
 left join {{ source('silver', 'ref_regions') }} r on r.code_region = d.code_region

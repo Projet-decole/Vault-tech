@@ -5,7 +5,7 @@
 {{ config(
     materialized='table',
     post_hook=["create index on {{ this }} (code_departement)", "create index on {{ this }} (code_region)",
-               "analyze {{ this }}"]
+               "create index on {{ this }} using gist (geom)", "analyze {{ this }}"]
 ) }}
 
 {% set familles = {
@@ -50,7 +50,9 @@ select
     -- densité pour 100 km² : compare des communes de tailles très différentes
     round((100 * coalesce(k.nb_cavites, 0) / nullif(c.superficie_km2, 0))::numeric, 2)
                                                 as cavites_pour_100_km2,
-    c.geometrie_geojson
+    c.geometrie_geojson,
+    -- le même contour en géométrie PostGIS (index spatial ci-dessus), pour la carte en tuiles (Martin)
+    {{ contour_geom('c.geometrie_geojson') }}  as geom
 from communes c
 left join comptes k using (code_insee)
 left join {{ source('silver', 'ref_departements') }} d using (code_departement)

@@ -112,6 +112,9 @@ models:
           - not_null:
               config:
                 severity: warn
+      - name: geom
+        description: Le contour en géométrie PostGIS (MultiPolygon, SRID 4326), lu par Martin pour les tuiles.
+        tests: [not_null]
 
   - name: cavites_par_departement
     description: Cavités par département (somme des communes), avec le contour du département.
