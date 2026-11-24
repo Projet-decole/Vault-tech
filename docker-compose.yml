@@ -45,8 +45,10 @@ services:
       # Adresse WebHDFS du NameNode + utilisateur HDFS sous lequel Mage écrit
       HDFS_WEB_URL: http://namenode:9870
       HDFS_USER: hadoop
-      # Rétention du bronze HDFS : nombre d'ingestions gardées par source et département (4 = un mois)
-      RETENTION_BRONZE_INGESTIONS: "4"
+      # Rétention du bronze HDFS : nombre d'ingestions gardées par source et département
+      # (2 = deux semaines avec le trigger hebdomadaire ; passé de 4 à 2 avant la montée en charge,
+      # pour ne pas empiler des copies d'un département entier)
+      RETENTION_BRONZE_INGESTIONS: "2"
       # Adresse du bucket S3 vue depuis le NAVIGATEUR (pour afficher les images dans Superset)
       S3_URL_PUBLIQUE: http://localhost:8333
     ports:

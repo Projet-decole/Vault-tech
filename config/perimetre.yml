@@ -21,7 +21,8 @@ cavites_france: true
 # Liste lue sur geo.api.gouv.fr à chaque exécution (villes à arrondissements : les arrondissements).
 # Une commune listée aussi dans "communes" n'est comptée qu'une fois.
 departements:
-    - "69"   # Rhône + Métropole de Lyon : 274 communes et arrondissements, ~1,9 million de parcelles
+    - "69"   # Rhône + Métropole de Lyon : 274 communes et arrondissements, ~960 000 parcelles
+    - "42"   # Loire : test de montée en charge (×2 parcelles), étape avant Auvergne-Rhône-Alpes
 
 # Communes ajoutées une par une
 communes:
