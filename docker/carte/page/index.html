@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cavités de France</title>
+  <!-- MapLibre GL : bibliothèque de carte qui dessine les tuiles vectorielles avec la carte graphique (WebGL) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <style>
+    :root {
+      --fond: #ffffff; --texte: #1f2328; --discret: #5b636b; --bord: #d0d7de;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    html, body { margin: 0; height: 100%; background: var(--fond); color: var(--texte); }
+    #carte { position: absolute; inset: 0; }
+    .panneau {
+      position: absolute; z-index: 1; background: rgba(255, 255, 255, .94);
+      border: 1px solid var(--bord); border-radius: 8px; padding: 10px 12px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .12); font-size: 13px; line-height: 1.35;
+    }
+    #legende { top: 10px; left: 10px; max-width: 250px; }
+    #legende h1 { font-size: 15px; margin: 0 0 2px; }
+    #legende .sous-titre { color: var(--discret); margin: 0 0 8px; }
+    #niveau { font-weight: 600; margin: 0 0 6px; }
+    #niveau span { font-weight: 400; color: var(--discret); }
+    .classe { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
+    .pastille { width: 18px; height: 12px; border-radius: 2px; border: 1px solid rgba(0, 0, 0, .15); flex: none; }
+    #aller { margin-top: 8px; width: 100%; font: inherit; padding: 3px; }
+    .source { color: var(--discret); font-size: 11px; margin: 8px 0 0; }
+    .maplibregl-popup-content { font-size: 13px; padding: 8px 10px; }
+    .maplibregl-popup-content h2 { font-size: 14px; margin: 0 0 4px; }
+    .maplibregl-popup-content .niv { color: var(--discret); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    .maplibregl-popup-content table { border-collapse: collapse; }
+    .maplibregl-popup-content td { padding: 1px 0; }
+    .maplibregl-popup-content td + td { padding-left: 10px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+    #erreur { display: none; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 360px; }
+  </style>
+</head>
+<body>
+<div id="carte"></div>
+
+<div id="legende" class="panneau">
+  <h1>Cavités souterraines</h1>
+  <p class="sous-titre">Nombre de cavités pour 100 km²</p>
+  <p id="niveau">Régions <span>· zoomez pour les départements</span></p>
+  <div id="classes"></div>
+  <select id="aller" aria-label="Aller à">
+    <option value="metropole">France métropolitaine</option>
+    <option value="guadeloupe">Guadeloupe</option>
+    <option value="martinique">Martinique</option>
+    <option value="guyane">Guyane</option>
+    <option value="reunion">La Réunion</option>
+    <option value="mayotte">Mayotte</option>
+  </select>
+  <p class="source">Cavités : BRGM · Contours : Etalab · Fond : © OpenStreetMap, © CARTO</p>
+</div>
+
+<div id="erreur" class="panneau">
+  <strong>La carte ne peut pas s'afficher.</strong>
+  <p>Ce navigateur ne fournit pas WebGL, l'accès à la carte graphique dont MapLibre a besoin pour dessiner.
+     Ouvrez cette page dans Firefox ou Chrome.</p>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------------------------
+// Une seule carte, trois niveaux. Chaque niveau est une source de tuiles servie par Martin
+// (une table gold), affichée seulement dans sa tranche de zoom :
+//   zoom < 5,5      régions
+//   5,5 à 8         départements
+//   zoom ≥ 8        communes
+// ---------------------------------------------------------------------------------------------
+const MARTIN = `${location.protocol}//${location.hostname}:3010`;
+
+const NIVEAUX = [
+  { id: 'region',      source: 'cavites_region',      cle: 'code_region',      nom: 'nom_region',
+    libelle: 'Régions',      min: 0,   max: 5.5, suite: 'zoomez pour les départements' },
+  { id: 'departement', source: 'cavites_departement', cle: 'code_departement', nom: 'nom_departement',
+    libelle: 'Départements', min: 5.5, max: 8,   suite: 'zoomez pour les communes' },
+  { id: 'commune',     source: 'cavites_commune',     cle: 'code_insee',       nom: 'nom_commune',
+    libelle: 'Communes',     min: 8,   max: 24,  suite: '' },
+];
+
+// Une seule échelle de couleurs pour les trois niveaux : la densité (pour 100 km²) se compare
+// d'un niveau à l'autre. Seuils choisis d'après la répartition réelle (médiane des départements
+// 16, 90e centile 56 ; la moitié des communes n'a aucune cavité connue).
+const CLASSES = [
+  { de: 0,   a: 0,    couleur: '#eceff1', texte: 'aucune cavité connue' },
+  { de: 0,   a: 5,    couleur: '#ffffb2', texte: 'moins de 5' },
+  { de: 5,   a: 15,   couleur: '#fed976', texte: '5 à 15' },
+  { de: 15,  a: 35,   couleur: '#feb24c', texte: '15 à 35' },
+  { de: 35,  a: 75,   couleur: '#fd8d3c', texte: '35 à 75' },
+  { de: 75,  a: 200,  couleur: '#f03b20', texte: '75 à 200' },
+  { de: 200, a: null, couleur: '#bd0026', texte: '200 et plus' },
+];
+
+// Expression MapLibre : choisit la couleur d'un polygone selon sa densité
+const couleur = ['case',
+  ['==', ['to-number', ['get', 'cavites_pour_100_km2']], 0], CLASSES[0].couleur,
+  ['step', ['to-number', ['get', 'cavites_pour_100_km2']],
+    CLASSES[1].couleur, 5, CLASSES[2].couleur, 15, CLASSES[3].couleur,
+    35, CLASSES[4].couleur, 75, CLASSES[5].couleur, 200, CLASSES[6].couleur]];
+
+document.getElementById('classes').innerHTML = CLASSES.map(c =>
+  `<div class="classe"><span class="pastille" style="background:${c.couleur}"></span>${c.texte}</div>`).join('');
+
+const VUES = {
+  metropole:  { center: [2.6, 46.6],    zoom: 4.6 },
+  guadeloupe: { center: [-61.55, 16.2], zoom: 8.3 },
+  martinique: { center: [-61.0, 14.65], zoom: 8.8 },
+  guyane:     { center: [-53.2, 4.0],   zoom: 6.2 },
+  reunion:    { center: [55.53, -21.12], zoom: 8.8 },
+  mayotte:    { center: [45.15, -12.82], zoom: 9.8 },
+};
+
+// Sans WebGL (certains navigateurs intégrés), MapLibre ne peut rien dessiner : on le dit clairement
+const essai = document.createElement('canvas');
+if (!(essai.getContext('webgl2') || essai.getContext('webgl'))) {
+  document.getElementById('erreur').style.display = 'block';
+}
+
+const carte = new maplibregl.Map({
+  container: 'carte',
+  ...VUES.metropole,
+  minZoom: 2,
+  maxZoom: 14,
+  attributionControl: { compact: true },
+  style: {
+    version: 8,
+    sources: {
+      // Fond de carte clair, en images (raster), sous les couleurs
+      fond: {
+        type: 'raster', tileSize: 256,
+        tiles: ['a', 'b', 'c'].map(s => `https://${s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png`),
+        attribution: '© OpenStreetMap contributors, © CARTO',
+      },
+    },
+    layers: [{ id: 'fond', type: 'raster', source: 'fond' }],
+  },
+});
+carte.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+carte.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+
+carte.on('load', () => {
+  for (const n of NIVEAUX) {
+    // url = le TileJSON de Martin (adresse des tuiles, zooms disponibles, colonnes publiées)
+    carte.addSource(n.source, { type: 'vector', url: `${MARTIN}/${n.source}`, promoteId: n.cle });
+    carte.addLayer({
+      id: `${n.id}-aplat`, type: 'fill', source: n.source, 'source-layer': n.source,
+      minzoom: n.min, maxzoom: n.max,
+      paint: {
+        'fill-color': couleur,
+        'fill-opacity': ['case', ['boolean', ['feature-state', 'survol'], false], 0.92, 0.72],
+      },
+    });
+    carte.addLayer({
+      id: `${n.id}-contour`, type: 'line', source: n.source, 'source-layer': n.source,
+      minzoom: n.min, maxzoom: n.max,
+      paint: {
+        'line-color': ['case', ['boolean', ['feature-state', 'survol'], false], '#1f2328', '#ffffff'],
+        'line-width': ['case', ['boolean', ['feature-state', 'survol'], false], 2, n.id === 'commune' ? 0.4 : 0.8],
+      },
+    });
+  }
+  majNiveau();
+});
+
+// Le titre du niveau suit le zoom
+function niveauCourant() {
+  const z = carte.getZoom();
+  return NIVEAUX.find(n => z >= n.min && z < n.max) || NIVEAUX[NIVEAUX.length - 1];
+}
+function majNiveau() {
+  const n = niveauCourant();
+  document.getElementById('niveau').innerHTML = n.libelle + (n.suite ? ` <span>· ${n.suite}</span>` : '');
+}
+carte.on('zoom', majNiveau);
+
+// Infobulle au survol : nom, nombre de cavités, densité, part des communes touchées
+const fmt = (v, dec = 0) => v == null ? '–'
+  : Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+const bulle = new maplibregl.Popup({ closeButton: false, closeOnClick: false, maxWidth: '280px', offset: 12 });
+let survole = null;
+
+function oublierSurvol() {
+  if (survole) carte.setFeatureState(survole, { survol: false });
+  survole = null;
+}
+
+carte.on('mousemove', (e) => {
+  const n = niveauCourant();
+  const [f] = carte.queryRenderedFeatures(e.point, { layers: [`${n.id}-aplat`] });
+  if (!f) { oublierSurvol(); bulle.remove(); carte.getCanvas().style.cursor = ''; return; }
+  carte.getCanvas().style.cursor = 'pointer';
+  if (!survole || survole.id !== f.id || survole.source !== n.source) {
+    oublierSurvol();
+    survole = { source: n.source, sourceLayer: n.source, id: f.id };
+    carte.setFeatureState(survole, { survol: true });
+  }
+  const p = f.properties;
+  const parent = n.id === 'commune' ? p.nom_departement : n.id === 'departement' ? p.nom_region : null;
+  const lignes = [
+    ['Cavités recensées', fmt(p.nb_cavites)],
+    ['Pour 100 km²', fmt(p.cavites_pour_100_km2, 1)],
+  ];
+  if (p.pct_communes_avec_cavite != null) lignes.push(['Communes touchées', `${fmt(p.pct_communes_avec_cavite, 1)} %`]);
+  lignes.push(['Superficie', `${fmt(p.superficie_km2)} km²`]);
+  bulle.setLngLat(e.lngLat).setHTML(
+    `<div class="niv">${n.libelle.slice(0, -1)}${parent ? ' · ' + parent : ''}</div>` +
+    `<h2>${p[n.nom] ?? '?'}</h2><table>${lignes.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>`
+  ).addTo(carte);
+});
+carte.on('mouseout', () => { oublierSurvol(); bulle.remove(); });
+
+document.getElementById('aller').addEventListener('change', (e) => carte.flyTo({ ...VUES[e.target.value], speed: 1.6 }));
+</script>
+</body>
+</html>

@@ -200,6 +200,38 @@ services:
       - seaweedfs_data:/data
     restart: unless-stopped
 
+  martin:
+    # Serveur de TUILES VECTORIELLES : découpe les tables gold (régions, départements, communes)
+    # en petits carrés de carte que le navigateur charge au fil du zoom. Image officielle MapLibre.
+    image: ghcr.io/maplibre/martin:1.16.1
+    container_name: homepedia-martin
+    command: ["--config", "/config/martin.yaml"]
+    environment:   # lus par martin.yaml (connection_string)
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "3010:3000"   # http://localhost:3010/catalog (3000 est souvent pris par d'autres projets)
+    volumes:
+      - ./docker/carte/martin.yaml:/config/martin.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  carte:
+    # La page de la carte multi-échelle (HTML + MapLibre GL), servie telle quelle par nginx.
+    # Ouverte seule ou intégrée au dashboard Superset dans une iframe.
+    image: nginx:1.31.7-alpine
+    container_name: homepedia-carte
+    ports:
+      - "8090:80"     # http://localhost:8090
+    volumes:
+      - ./docker/carte/page:/usr/share/nginx/html:ro
+    depends_on:
+      - martin
+    restart: unless-stopped
+
 volumes:
   pg_data:
   hdfs_namenode:

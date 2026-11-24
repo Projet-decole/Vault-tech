@@ -1,0 +1,69 @@
+# Configuration de Martin, le serveur de tuiles vectorielles de la carte multi-échelle.
+# Une tuile = un carré de carte (niveau de zoom z, colonne x, ligne y) que le navigateur demande
+# quand on se déplace : /cavites_region/5/16/11 renvoie les régions qui touchent ce carré.
+# Martin écrit la requête SQL (ST_AsMVTGeom + ST_AsMVT), PostGIS fabrique la tuile, Martin la renvoie.
+# Doc : https://maplibre.org/martin/config-file/ (version 1.16.1)
+
+listen_addresses: 0.0.0.0:3000
+worker_processes: 2          # 8 par défaut ; 2 suffisent pour une démo et ménagent la machine
+
+cache:
+  size_mb: 128               # tuiles déjà calculées gardées en mémoire (512 Mo par défaut)
+
+postgres:
+  # Identifiants lus dans les variables d'environnement (venues du .env, voir docker-compose.yml)
+  connection_string: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  pool_size: 4
+  # Pas de découverte automatique : on publie seulement les trois tables ci-dessous.
+  # Sinon Martin publierait toutes les tables à géométrie (dont les parcelles) avec toutes leurs colonnes.
+  auto_publish: false
+  tables:
+    # Les zooms min et max disent pour quels zooms Martin accepte de calculer des tuiles de la couche.
+    # La page MapLibre décide, elle, à quel zoom chaque couche s'affiche (un cran de recouvrement).
+    cavites_region:
+      schema: gold
+      table: cavites_par_region
+      geometry_column: geom
+      geometry_type: MULTIPOLYGON
+      srid: 4326
+      minzoom: 0
+      maxzoom: 7
+      # Seules ces colonnes partent dans les tuiles (pas le contour GeoJSON en texte, très lourd)
+      properties:
+        code_region: text
+        nom_region: text
+        nb_cavites: numeric
+        cavites_pour_100_km2: numeric
+        pct_communes_avec_cavite: numeric
+        superficie_km2: numeric
+    cavites_departement:
+      schema: gold
+      table: cavites_par_departement
+      geometry_column: geom
+      geometry_type: MULTIPOLYGON
+      srid: 4326
+      minzoom: 4
+      maxzoom: 10
+      properties:
+        code_departement: text
+        nom_departement: text
+        nom_region: text
+        nb_cavites: numeric
+        cavites_pour_100_km2: numeric
+        pct_communes_avec_cavite: numeric
+        superficie_km2: numeric
+    cavites_commune:
+      schema: gold
+      table: cavites_par_commune
+      geometry_column: geom
+      geometry_type: MULTIPOLYGON
+      srid: 4326
+      minzoom: 7
+      maxzoom: 12             # au-delà, MapLibre agrandit les tuiles du zoom 12 (contours assez fins)
+      properties:
+        code_insee: text
+        nom_commune: text
+        nom_departement: text
+        nb_cavites: int8
+        cavites_pour_100_km2: numeric
+        superficie_km2: numeric
