@@ -2,14 +2,17 @@
 -- geom : le même contour en géométrie PostGIS, avec un index spatial, pour la carte en tuiles (Martin).
 {{ config(materialized='table', post_hook=["create index on {{ this }} using gist (geom)", "analyze {{ this }}"]) }}
 
+{# sum() ignore les communes non analysées (null) : null au total = aucune commune analysée #}
 {% set colonnes = ['nb_cavites', 'nb_ouvrages_militaires', 'nb_cavites_naturelles', 'nb_ouvrages_civils',
-                   'nb_carrieres', 'nb_caves', 'nb_indeterminees', 'superficie_km2'] %}
+                   'nb_carrieres', 'nb_caves', 'nb_indeterminees', 'superficie_km2',
+                   'nb_parcelles_analysees', 'nb_parcelles_exposition_forte', 'nb_parcelles_proximite'] %}
 
 with sommes as (
     select
         code_departement,
         count(*) as nb_communes,
         count(*) filter (where nb_cavites > 0) as nb_communes_avec_cavite,
+        count(nb_parcelles_analysees) as nb_communes_analysees,
         {% for c in colonnes -%}
         sum({{ c }}) as {{ c }}{{ ',' if not loop.last }}
         {% endfor %}
@@ -28,6 +31,9 @@ select
     {% endfor -%}
     round((100 * s.nb_cavites / nullif(s.superficie_km2, 0))::numeric, 2)          as cavites_pour_100_km2,
     round((100.0 * s.nb_communes_avec_cavite / nullif(s.nb_communes, 0))::numeric, 1) as pct_communes_avec_cavite,
+    s.nb_communes_analysees,
+    round((100.0 * (s.nb_parcelles_exposition_forte + s.nb_parcelles_proximite)
+           / nullif(s.nb_parcelles_analysees, 0))::numeric, 1)                     as pct_parcelles_exposees,
     d.geometrie_geojson,
     {{ contour_geom('d.geometrie_geojson') }}                    as geom
 from {{ source('silver', 'ref_departements') }} d
