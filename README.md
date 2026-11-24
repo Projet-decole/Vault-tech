@@ -83,7 +83,8 @@ Puis ouvrir le tableau de bord : http://localhost:8088/superset/dashboard/cavite
 | Interface | URL | Identifiants | À quoi ça sert |
 |---|---|---|---|
 | **Superset** | http://localhost:8088 | `admin` / `SUPERSET_ADMIN_PASSWORD` du `.env` | Tableaux de bord, SQL Lab |
-| **Carte multi-échelle** | http://localhost:8090 | — | Une carte, trois niveaux selon le zoom (régions, départements, communes), coloriée par densité de cavités. Demande WebGL (Firefox, Chrome). Aussi dans Superset : dashboard « Carte des cavités », créé par `python3 docker/superset/carte/creer_dashboard_carte.py` |
+| **Carte multi-échelle** | http://localhost:8090 | — | Une carte, trois niveaux selon le zoom (régions, départements, communes), coloriée par densité de cavités. Demande WebGL (Firefox, Chrome). Aussi dans Superset, dashboard « Prospection » |
+| **Dashboard Prospection** | http://localhost:8088/superset/dashboard/prospection/ | comme Superset | Le parcours d'un prospecteur, de la France à la commune : chiffres clés, carte multi-échelle, tableaux triables et exportables par région, département et commune, filtres Région et Département. Créé par `python3 docker/superset/prospection/creer_dashboard_prospection.py` (relançable) |
 | **Martin** (tuiles) | http://localhost:3010/catalog | — | Serveur de tuiles vectorielles de la carte (config : `docker/carte/martin.yaml`) ; une tuile : `/cavites_region/{z}/{x}/{y}` |
 | **Mage** | http://localhost:6789 | `admin@admin.com` / `admin` | Pipelines, blocs, logs, triggers |
 | **dbt docs** | http://localhost:8081 | — | Doc des tables, graphe de lignage (bouton en bas à droite) |

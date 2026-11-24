@@ -36,6 +36,8 @@ postgres:
         cavites_pour_100_km2: numeric
         pct_communes_avec_cavite: numeric
         superficie_km2: numeric
+        nb_parcelles_analysees: numeric
+        pct_parcelles_exposees: numeric
     cavites_departement:
       schema: gold
       table: cavites_par_departement
@@ -52,6 +54,8 @@ postgres:
         cavites_pour_100_km2: numeric
         pct_communes_avec_cavite: numeric
         superficie_km2: numeric
+        nb_parcelles_analysees: numeric
+        pct_parcelles_exposees: numeric
     cavites_commune:
       schema: gold
       table: cavites_par_commune
@@ -67,3 +71,5 @@ postgres:
         nb_cavites: int8
         cavites_pour_100_km2: numeric
         superficie_km2: numeric
+        nb_parcelles_analysees: numeric
+        pct_parcelles_exposees: numeric

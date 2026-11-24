@@ -207,6 +207,8 @@ carte.on('mousemove', (e) => {
   ];
   if (p.pct_communes_avec_cavite != null) lignes.push(['Communes touchées', `${fmt(p.pct_communes_avec_cavite, 1)} %`]);
   lignes.push(['Superficie', `${fmt(p.superficie_km2)} km²`]);
+  // Parcelles : seulement là où le cadastre a été analysé (Rhône, Loire, 6 communes de Moselle)
+  if (p.nb_parcelles_analysees != null) lignes.push(['Parcelles à < 500 m', `${fmt(p.pct_parcelles_exposees, 1)} % de ${fmt(p.nb_parcelles_analysees)}`]);
   bulle.setLngLat(e.lngLat).setHTML(
     `<div class="niv">${n.libelle.slice(0, -1)}${parent ? ' · ' + parent : ''}</div>` +
     `<h2>${p[n.nom] ?? '?'}</h2><table>${lignes.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>`
