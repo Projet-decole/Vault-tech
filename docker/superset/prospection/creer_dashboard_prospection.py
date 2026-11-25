@@ -7,7 +7,8 @@ Les mêmes cavités se lisent de deux façons :
 
 Onglet « France » : chiffres clés, carte multi-échelle (iframe vers le conteneur "carte"), puis un
 tableau triable, filtrable et exportable (CSV) par niveau : régions, départements, communes.
-Filtres : Région, puis Département (en cascade). La carte, dans son iframe, ne suit pas les filtres.
+Filtres : Région, puis Département (en cascade). La carte, dans son iframe servie par nginx (port 8090),
+les suit et les modifie au clic (voir docker/carte/page/index.html).
 Onglet « Commune » : les graphiques et le filtre Commune du dashboard « Cavités & parcelles »,
 repris tels quels (ce dashboard doit exister : il est importé au premier démarrage de Superset).
 

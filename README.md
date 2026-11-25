@@ -11,6 +11,12 @@ Résultat : un tableau de bord Superset avec une carte (parcelles + cavités), l
 par commune, le nombre de parcelles à moins de 200 m d'une cavité, une **galerie** (photo aérienne +
 description de chaque cavité) et les **mots-clés** trouvés dans les descriptions, filtrables par commune.
 
+**Échelle nationale :** les cavités de toute la France sont comptées par région, département et commune
+(tables gold `cavites_par_*`). Le dashboard **Prospection** suit le parcours d'un prospecteur, de la France
+à la commune, avec une **carte multi-échelle** (régions, puis départements, puis communes selon le zoom) qui
+filtre le dashboard au clic et suit ses filtres. Les parcelles, elles, sont analysées sur un périmètre
+choisi (aujourd'hui le Rhône, la Loire et 6 communes de Moselle, ~2,1 millions de parcelles).
+
 ---
 
 ## Architecture
@@ -29,6 +35,11 @@ description de chaque cavité) et les **mots-clés** trouvés dans les descripti
                                           │    (texte libre, recherche plein texte)        │
  Photos aériennes IGN ──── Mage ──> bucket S3 "medias" (SeaweedFS) ─(chemins en base)──────┘
 ```
+
+La carte multi-échelle a son propre trajet : **Martin** (serveur de tuiles) découpe les tables gold
+`cavites_par_*` en tuiles vectorielles (PostGIS `ST_AsMVT`), **MapLibre GL** les dessine dans le navigateur
+(WebGL), et **nginx** sert la page, les tuiles et Superset sous une même adresse (port 8090), pour que la
+carte, dans son iframe, puisse lire et modifier les filtres du dashboard.
 
 Deux familles de stockage en plus des tables :
 - **MongoDB** (base *documentaire*) : la fiche complète de chaque cavité, en document JSON imbriqué,
@@ -69,14 +80,16 @@ Deux familles de stockage en plus des tables :
 cp .env.example .env
 #    SUPERSET_SECRET_KEY : générer avec   openssl rand -base64 42
 
-# 2. Construire les images et démarrer les 11 services (5 à 10 min la 1re fois)
+# 2. Construire les images et démarrer les 13 services (5 à 10 min la 1re fois)
 docker compose up -d --build
 
 # 3. Remplir les données une première fois (~5 min : photos) — ensuite, automatique chaque lundi
 docker compose exec mage mage run homepedia homepedia_full
 ```
 
-Puis ouvrir le tableau de bord : http://localhost:8088/superset/dashboard/cavites-parcelles/ (ou **Dashboards → Cavités & parcelles**).
+Puis ouvrir les tableaux de bord par le port 8090 : http://localhost:8090/superset/dashboard/prospection/
+(France → commune) et http://localhost:8090/superset/dashboard/cavites-parcelles/ (une commune en détail).
+Le dashboard Prospection se crée avec `python3 docker/superset/prospection/creer_dashboard_prospection.py`.
 
 ### Où regarder
 
@@ -122,16 +135,19 @@ Paris, Lyon, Marseille : utiliser les codes des **arrondissements** (Lyon 1er = 
 | `homepedia_full` | tout, dans l'ordre (13 blocs, dont MongoDB, photos et rétention) | ~10 min (+ ~3 min pour les photos d'un nouveau territoire) |
 | `ingest_bronze` | téléchargement → HDFS (commune par commune, en flux) | ~7 min |
 | `run_spark_clean` | HDFS → silver (3 jobs Spark) | ~2 min |
-| `build_gold` | silver → gold (`dbt build`, 50 tests) + doc | ~2 min 20 |
+| `build_gold` | silver → gold (`dbt build`, tests compris) + doc | ~2 min 20 |
 
-Durées mesurées sur le périmètre actuel : **280 communes (Rhône entier + 6 communes de Moselle),
-~1 million de parcelles**. Pour 9 communes (87 000 parcelles), `homepedia_full` prenait ~2 min.
+Durées des étapes mesurées sur le Rhône seul (~1 million de parcelles). Sur le périmètre actuel
+(**Rhône + Loire + 6 communes de Moselle, ~2,1 millions de parcelles**), `homepedia_full` prend **~32 min**
+(12 min pour le Rhône seul, ~2 min pour 9 communes). À ce volume, le worker Spark monte à 2,6 Go sur
+ses 3 Go : voir *Dépannage* si Docker manque de mémoire.
 
 En ligne de commande : `docker compose exec mage mage run homepedia <pipeline>`.
 
 ### Historique du bronze (rétention)
 HDFS garde une ingestion par exécution. Le bloc `retention_bronze` (juste après l'ingestion) ne garde
-que les **4 dernières** par source et département ; réglage : `RETENTION_BRONZE_INGESTIONS` dans
+que les **2 dernières** par source et département (assez pour revenir en arrière une fois, sans remplir
+le disque à ~2 millions de parcelles) ; réglage : `RETENTION_BRONZE_INGESTIONS` dans
 `docker-compose.yml` (service `mage`).
 
 ### Passer en cluster sur plusieurs PC
@@ -157,13 +173,16 @@ Pour qu'il apparaisse dans Superset : l'ajouter à `TABLES_GOLD` dans `docker/su
 
 ```
 config/perimetre.yml            ← LA configuration : liste des communes étudiées
-docker-compose.yml              ← les 11 services
+docker-compose.yml              ← les 13 services
 .env.example                    ← modèle des secrets (.env n'est jamais commité)
 docker/
   hadoop/                       ← image HDFS + configuration (hadoop.env)
   seaweedfs/demarrage.sh        ← stockage S3 : droits d'accès (Mage écrit, le navigateur lit)
   mage/Dockerfile               ← Mage + Java + client HDFS + pyspark (virtualenv séparé)
-  superset/                     ← image Superset, démarrage, dashboard versionné (dashboard/)
+  superset/                     ← image Superset, démarrage, dashboard versionné (dashboard/),
+                                  script du dashboard Prospection (prospection/)
+  carte/                        ← carte multi-échelle : Martin (martin.yaml), nginx (nginx.conf),
+                                  page MapLibre (page/), emprises des territoires (generer_emprises.sh)
 mage/homepedia/                 ← projet Mage
   pipelines/                    ← homepedia_full, ingest_bronze, run_spark_clean, build_gold
   data_loaders/ transformers/ data_exporters/ custom/   ← les blocs
@@ -185,6 +204,11 @@ PLAN_PREMIER_JET.md             ← plan d'origine + écarts réalisés
 | Un bloc Spark échoue : « Aucun worker Spark enregistré » | Après une mise en veille, le master Spark a « oublié » le worker | `docker compose restart spark-worker` |
 | Un job Spark reste en `WAITING` | Idem, ou pas assez de RAM pour Docker | Idem ; vérifier http://localhost:8080 (1 worker, 2 cœurs) |
 | Écriture HDFS refusée juste après le démarrage | Le NameNode est en *safe mode* le temps que le DataNode se présente | Attendre ~30 s (`docker compose exec namenode hdfs dfsadmin -safemode wait`) |
+| Docker Desktop s'arrête pendant `homepedia_full` (et parfois l'app qui tourne à côté) | Mémoire épuisée : Linux tue le plus gros processus, la machine virtuelle de Docker | Pendant le pipeline, arrêter ce qui ne sert pas : `docker compose stop superset mongo-express dbt-docs martin carte` (puis `start`) ; ou allouer plus de RAM à Docker |
+| Après un arrêt brutal : « Name node is in safe mode », blocs manquants | HDFS a perdu les fichiers en cours d'écriture | `docker compose exec namenode hdfs dfsadmin -safemode leave`, puis relancer `homepedia_full` (il réécrit l'ingestion du jour) |
+| La carte reste blanche ou affiche « La carte ne peut pas s'afficher » | Pas de WebGL (navigateurs intégrés) | Ouvrir dans Firefox ou Chrome |
+| La carte ne filtre pas le dashboard, ou ne suit pas ses filtres | Dashboard ouvert par le port 8088 : la carte (8090) n'a pas le droit de lire la page | Passer par http://localhost:8090 |
+| Une modification de `docker/carte/page/` n'apparaît pas | Fichier remplacé, même piège que pour Mage | `docker compose restart carte` |
 | Graphiques Superset vides | Tables gold pas encore construites | Lancer `homepedia_full` |
 | La carte n'affiche qu'une commune | Voulu : le filtre Commune est obligatoire (~1 million de parcelles au total, trop pour un navigateur) | Choisir la commune dans le panneau de filtres à gauche |
 | Un test dbt échoue | Donnée incohérente : dbt arrête la chaîne avant de publier un gold faux | Lire le test en échec dans les logs du bloc `run_dbt_build` |
@@ -207,4 +231,4 @@ PLAN_PREMIER_JET.md             ← plan d'origine + écarts réalisés
 
 PostgreSQL 17 + PostGIS 3.5 · Mage 0.9.79 · Hadoop 3.4.3 · Spark 4.1.3 (Java 17, Python 3.10) ·
 dbt-core 1.8.7 + dbt-postgres 1.8.2 · Superset 6.1.0 · MongoDB 8.0.32 (+ connecteur Spark 11.1.0) ·
-mongo-express 1.0.2 · SeaweedFS 4.47
+mongo-express 1.0.2 · SeaweedFS 4.47 · Martin 1.16.1 · MapLibre GL 5.24.0 · nginx 1.31.7
